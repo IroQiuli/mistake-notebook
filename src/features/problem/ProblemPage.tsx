@@ -420,7 +420,7 @@ export default function ProblemPage() {
         {zoomAnswer !== null && answerUrls[zoomAnswer] && (
           <ZoomableImage
             src={answerUrls[zoomAnswer].url}
-            className="h-[70vh] w-full rounded-lg"
+            className="h-[62vh] w-full rounded-lg"
             alt="答案大图"
           />
         )}

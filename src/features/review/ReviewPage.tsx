@@ -332,7 +332,7 @@ export default function ReviewPage() {
 
       <Dialog open={zoomUrl !== null} onClose={() => setZoomUrl(null)} title="答案" size="lg">
         {zoomUrl && (
-          <ZoomableImage src={zoomUrl} className="h-[70vh] w-full rounded-lg" alt="答案大图" />
+          <ZoomableImage src={zoomUrl} className="h-[62vh] w-full rounded-lg" alt="答案大图" />
         )}
       </Dialog>
     </div>

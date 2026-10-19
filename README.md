@@ -17,13 +17,13 @@
 | --- | --- | --- |
 | ![今日](docs/screenshots/today.png) | ![复习手写](docs/screenshots/review-writing.png) | ![批注](docs/screenshots/problem-annotated.png) |
 
-| 统计 | PDF 截题 | 筛选（科目树） |
+| 统计 | 正确率（按科目展开） | PDF 截题 |
 | --- | --- | --- |
-| ![统计](docs/screenshots/stats.png) | ![PDF](docs/screenshots/pdf-picker.png) | ![筛选](docs/screenshots/filter-tree.png) |
+| ![统计](docs/screenshots/stats.png) | ![正确率](docs/screenshots/accuracy.png) | ![PDF](docs/screenshots/pdf-picker.png) |
 
-| 错题本 | 桌面宽屏 | |
+| 错题本 | 筛选（科目树） | 桌面宽屏 |
 | --- | --- | --- |
-| ![错题本](docs/screenshots/library.png) | ![桌面](docs/screenshots/desktop.png) | |
+| ![错题本](docs/screenshots/library.png) | ![筛选](docs/screenshots/filter-tree.png) | ![桌面](docs/screenshots/desktop.png) |
 
 ## 本地开发
 
