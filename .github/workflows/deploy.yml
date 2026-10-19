@@ -18,9 +18,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -29,11 +29,9 @@ jobs:
 
       - run: npm test
 
-      # 首次运行会自动把仓库的 Pages 打开（Source = GitHub Actions）
-      - id: pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      # 仓库的 Pages 需要在 Settings → Pages → Source 选一次「GitHub Actions」
+      # （GITHUB_TOKEN 没有创建 Pages 站点的管理员权限，所以不在这里自动开启）
+      - uses: actions/configure-pages@v5
 
       - run: npm run build
         env:
