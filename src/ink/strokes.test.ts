@@ -42,7 +42,17 @@ describe('笔迹几何', () => {
     expect(hitTestStroke(s, 0.5, 0.5, 0.02)).toBe(false);
   });
 
-  it('hitTest 从后往前找最近的笔画', () => {
+  it('橡皮半径按 x/y 分别换算（长图不会横向失灵）', () => {
+    const s = stroke([
+      [0.1, 0.1, 0.5],
+      [0.9, 0.1, 0.5],
+    ]);
+    // 横向 18px / 宽 400 = 0.045；纵向 18px / 高 1600 = 0.011
+    expect(hitTestStroke(s, 0.5, 0.108, 0.045, 0.011)).toBe(true);
+    expect(hitTestStroke(s, 0.5, 0.13, 0.045, 0.011)).toBe(false);
+  });
+
+  it('hitTest 返回所有命中的笔画 id', () => {
     const a = stroke([
       [0.1, 0.1, 0.5],
       [0.2, 0.2, 0.5],
@@ -51,8 +61,8 @@ describe('笔迹几何', () => {
       [0.1, 0.1, 0.5],
       [0.2, 0.2, 0.5],
     ]), id: 's2' };
-    expect(hitTest([a, b], 0.15, 0.15, 0.02)?.id).toBe('s2');
-    expect(hitTest([a, b], 0.8, 0.8, 0.02)).toBeUndefined();
+    expect(hitTest([a, b], 0.15, 0.15, 0.03)).toEqual(['s2', 's1']);
+    expect(hitTest([a, b], 0.8, 0.8, 0.03)).toEqual([]);
   });
 
   it('线宽按画布宽度换算且有下限', () => {

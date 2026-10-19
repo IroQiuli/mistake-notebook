@@ -33,10 +33,14 @@ function WriteArea({
   problemId,
   stemUrl,
   showOldInk,
+  writing,
+  onToggleWriting,
 }: {
   problemId: string;
   stemUrl: string;
   showOldInk: boolean;
+  writing: boolean;
+  onToggleWriting: () => void;
 }) {
   const ink = useInk('attempt', problemId, 0, { fresh: true });
   const tools = useInkTools();
@@ -54,27 +58,47 @@ function WriteArea({
           tool={tools.tool}
           color={tools.color}
           width={tools.width}
+          enabled={writing}
           backgroundStrokes={showOldInk ? (oldInk?.strokes ?? []) : []}
           alt="题干，可直接书写"
         />
       </div>
-      <div className="mt-2">
-        <InkToolbar
-          tool={tools.tool}
-          color={tools.color}
-          width={tools.width}
-          onToolChange={tools.setTool}
-          onColorChange={tools.setColor}
-          onWidthChange={tools.setWidth}
-          onUndo={() => surface.current?.undo()}
-          onRedo={() => surface.current?.redo()}
-          onClear={() => {
-            if (window.confirm('清空这次作答的笔迹？')) surface.current?.clear();
-          }}
-        />
-      </div>
+
+      {writing ? (
+        <div className="mt-2 space-y-1">
+          <InkToolbar
+            tool={tools.tool}
+            color={tools.color}
+            width={tools.width}
+            onToolChange={tools.setTool}
+            onColorChange={tools.setColor}
+            onWidthChange={tools.setWidth}
+            onUndo={() => surface.current?.undo()}
+            onRedo={() => surface.current?.redo()}
+            onClear={() => {
+              if (window.confirm('清空这次作答的笔迹？')) surface.current?.clear();
+            }}
+          />
+          <button
+            type="button"
+            onClick={onToggleWriting}
+            className="w-full py-1 text-center text-[11px] text-zinc-400"
+          >
+            结束手写（恢复上下滑动）
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggleWriting}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 py-3 text-sm text-zinc-500 active:bg-white"
+        >
+          ✍️ 开启手写
+        </button>
+      )}
+
       <p className="mt-1.5 text-center text-[11px] text-zinc-400">
-        直接在题上写，评完分自动保存这次的解题过程
+        {writing ? '直接写，评完分自动保存这次的解题过程' : '现在可以正常上下滑动，看完整道题'}
       </p>
     </div>
   );
@@ -87,6 +111,7 @@ export default function ReviewPage() {
   const { queue, index, current, revealed, finished, summary, reveal, rate } = useSession(subjectId);
 
   const [showOldInk, setShowOldInk] = useState(false);
+  const [writing, setWriting] = useState(false);
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
   const problemId = current?.problem.id;
 
@@ -133,6 +158,7 @@ export default function ReviewPage() {
 
   useEffect(() => {
     setShowOldInk(false);
+    setWriting(false);
   }, [problemId]);
 
   useEffect(() => {
@@ -253,6 +279,8 @@ export default function ReviewPage() {
             problemId={current.problem.id}
             stemUrl={stemUrl}
             showOldInk={showOldInk}
+            writing={writing}
+            onToggleWriting={() => setWriting((v) => !v)}
           />
         ) : (
           <div className="flex h-full items-center justify-center p-8 text-center text-sm text-zinc-400">

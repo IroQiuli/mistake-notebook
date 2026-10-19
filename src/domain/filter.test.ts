@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterProblems, countActiveFilters } from './filter';
+import { filterProblems, countActiveFilters, isRealExam } from './filter';
 import type { Chapter, Problem, Topic } from './types';
 
 const T0 = 1_700_000_000_000;
@@ -90,5 +90,34 @@ describe('filterProblems', () => {
 
   it('统计生效筛选数', () => {
     expect(countActiveFilters({ keyword: 'x', difficulty: [1], status: 'all' })).toBe(2);
+  });
+
+  it('只看真题：结构化字段与老数据文本都算', () => {
+    const list = [
+      p({ id: 'a', sourceKind: '真题' }),
+      p({ id: 'b', sourceKind: '模拟题' }),
+      p({ id: 'c', sourcePaper: '2021 真题 第3题' }),
+      p({ id: 'd', sourcePaper: '李林四套' }),
+    ];
+    expect(filterProblems(list, { realOnly: true }, chapters, topics).map((x) => x.id)).toEqual([
+      'a',
+      'c',
+    ]);
+    expect(filterProblems(list, {}, chapters, topics)).toHaveLength(4);
+  });
+
+  it('真题 + 年份组合', () => {
+    const list = [
+      p({ id: 'a', sourceKind: '真题', sourceYear: 2023 }),
+      p({ id: 'b', sourceKind: '真题', sourceYear: 2022 }),
+    ];
+    expect(
+      filterProblems(list, { realOnly: true, years: [2023] }, chapters, topics).map((x) => x.id)
+    ).toEqual(['a']);
+  });
+
+  it('isRealExam 优先用结构化字段', () => {
+    expect(isRealExam(p({ id: 'a', sourceKind: '真题' }))).toBe(true);
+    expect(isRealExam(p({ id: 'b', sourceKind: '模拟题', sourcePaper: '真题改编' }))).toBe(false);
   });
 });

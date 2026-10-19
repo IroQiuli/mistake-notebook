@@ -9,10 +9,14 @@ import {
   calcStreak,
   chapterMastery,
   dailyCounts,
+  errorTagDistribution,
   forecast,
   overallRetention,
   ratingDistribution,
 } from '../../domain/stats';
+import { ERROR_TAG_COLORS } from '../../domain/taxonomy';
+import { practiceChapter } from '../../storage/problems';
+import { useToast } from '../../ui/Toast';
 import { learningDayStart } from '../../domain/time';
 import { cn } from '../../ui/cn';
 import { EmptyState } from '../../ui/EmptyState';
@@ -151,6 +155,7 @@ function Forecast({
 
 export default function StatsPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const logs = useLiveQuery(() => db.reviewLogs.toArray(), [], []);
   const problems = useLiveQuery(() => db.problems.toArray(), [], []);
   const cards = useLiveQuery(() => db.cards.toArray(), [], []);
@@ -174,6 +179,7 @@ export default function StatsPage() {
     [logs, now]
   );
   const streak = useMemo(() => calcStreak(logs, now), [logs, now]);
+  const tagDist = useMemo(() => errorTagDistribution(problems), [problems]);
 
   const accSubjects = useMemo(
     () => accuracyBySubject(logs, problems, subjects, since30),
@@ -336,9 +342,42 @@ export default function StatsPage() {
       </section>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 className="text-sm font-medium text-zinc-800">错因分布</h2>
+          <span className="text-[10px] text-zinc-400">共 {tagDist.reduce((s, t) => s + t.count, 0)} 个标签</span>
+        </div>
+
+        {tagDist.length === 0 ? (
+          <p className="py-3 text-center text-xs text-zinc-400">
+            还没有打错因标签。录题或编辑时，在「更多信息 → 错因标签」里勾一下。
+          </p>
+        ) : (
+          <ul className="space-y-2.5">
+            {tagDist.map((t) => (
+              <li key={t.tag}>
+                <div className="flex items-baseline justify-between text-xs">
+                  <span className="text-zinc-700">{t.tag}</span>
+                  <span className="tabular-nums text-zinc-500">{t.count} 题</span>
+                </div>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-zinc-100">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.max(4, (t.count / Math.max(1, tagDist[0].count)) * 100)}%`,
+                      backgroundColor: ERROR_TAG_COLORS[t.tag] ?? '#f97316',
+                    }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-medium text-zinc-800">章节掌握度</h2>
-          <span className="text-[10px] text-zinc-400">越靠前越薄弱</span>
+          <span className="text-[10px] text-zinc-400">越靠前越薄弱，可一键加练</span>
         </div>
 
         <div className="no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
@@ -373,13 +412,13 @@ export default function StatsPage() {
         ) : (
           <ul className="space-y-2.5">
             {visibleMastery.map((m) => (
-              <li key={m.chapterId}>
+              <li key={m.chapterId} className="flex items-start gap-2">
                 <button
                   type="button"
                   onClick={() =>
                     navigate(`/library?subject=${m.subjectId}&chapter=${m.chapterId}`)
                   }
-                  className="w-full text-left"
+                  className="min-w-0 flex-1 text-left"
                 >
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">
@@ -403,6 +442,19 @@ export default function StatsPage() {
                     {m.total} 题 · 已掌握 {m.archived} · 待复习 {m.due}
                   </div>
                 </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const n = await practiceChapter(m.chapterId, 5);
+                    toast.show(
+                      n > 0 ? `已把 ${n} 道题加入今日队列` : '这个章节的题今天都已在队列里',
+                      n > 0 ? 'success' : 'info'
+                    );
+                  }}
+                  className="mt-0.5 shrink-0 rounded-lg border border-orange-200 px-2 py-1 text-[10px] text-orange-600 active:bg-orange-50"
+                >
+                  加练
+                </button>
               </li>
             ))}
           </ul>
@@ -410,7 +462,7 @@ export default function StatsPage() {
 
         <p className="mt-3 text-[10px] leading-relaxed text-zinc-400">
           掌握度 = 该章节题目的平均记忆保持率（FSRS 预测「现在还记得」的概率），
-          已标记掌握的题按 100% 计。点一行可查看该章节的错题。
+          已标记掌握的题按 100% 计。点章节看错题，点「加练」把最弱的 5 道提前到今天。
         </p>
       </section>
 

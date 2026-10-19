@@ -16,6 +16,9 @@ interface FilterBarProps {
   topics: Topic[];
   subjectId?: string;
   years: number[];
+  /** 打了「真题」标记的题目数量与年份 */
+  realCount: number;
+  realYears: number[];
 }
 
 const STATUS: { value: ProblemStatus; label: string }[] = [
@@ -64,9 +67,12 @@ export function FilterBar({
   topics,
   subjectId,
   years,
+  realCount,
+  realYears,
 }: FilterBarProps) {
   const [draft, setDraft] = useState<ProblemFilter>(value);
   const [openSubjects, setOpenSubjects] = useState<Set<string>>(new Set());
+  const [realOpen, setRealOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -157,6 +163,67 @@ export function FilterBar({
                 {d} 星
               </Chip>
             ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-2 text-xs font-medium text-zinc-500">真题</div>
+          <div className="overflow-hidden rounded-xl border border-zinc-200">
+            <button
+              type="button"
+              onClick={() => setRealOpen((v) => !v)}
+              className="flex w-full items-center justify-between px-3 py-2.5 text-left active:bg-zinc-50"
+            >
+              <span className="flex items-center gap-2 text-sm text-zinc-800">
+                <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] text-orange-700">
+                  真题
+                </span>
+                历年金题
+              </span>
+              <span className="flex items-center gap-2 text-[11px] text-zinc-400">
+                {draft.realOnly ? '已筛选' : `${realCount} 道`}
+                <ChevronDown
+                  size={14}
+                  className={cn('transition-transform', realOpen && 'rotate-180')}
+                />
+              </span>
+            </button>
+            {realOpen && (
+              <div className="flex flex-wrap gap-1.5 bg-zinc-50/70 px-3 pb-3 pt-1">
+                <Chip
+                  active={Boolean(draft.realOnly) && !draft.years?.length}
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      realOnly: !(draft.realOnly && !draft.years?.length),
+                      years: [],
+                    })
+                  }
+                >
+                  全部真题
+                </Chip>
+                {realYears.map((y) => (
+                  <Chip
+                    key={y}
+                    active={Boolean(draft.realOnly) && (draft.years ?? []).includes(y)}
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        realOnly: true,
+                        years: (draft.years ?? []).includes(y) && draft.years?.length === 1 ? [] : [y],
+                      })
+                    }
+                  >
+                    {y}
+                  </Chip>
+                ))}
+                {realYears.length === 0 && (
+                  <span className="text-[10px] text-zinc-400">
+                    还没有标记为真题的题目（录入时选「来源类型 → 真题」）
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

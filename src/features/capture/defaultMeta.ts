@@ -21,5 +21,6 @@ export async function defaultMeta(): Promise<MetaValue> {
     topicIds: [],
     difficulty: 3,
     wrongNote: '',
+    errorTags: [],
   };
 }

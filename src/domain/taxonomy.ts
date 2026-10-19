@@ -4,6 +4,25 @@ export interface SeedSubject {
   chapters: string[];
 }
 
+/** 错因标签：比自由文本更好统计「到底栽在哪」 */
+export const ERROR_TAGS = [
+  '概念不清',
+  '计算失误',
+  '审题看漏',
+  '时间不够',
+  '公式记错',
+  '方法没想到',
+] as const;
+
+export const ERROR_TAG_COLORS: Record<string, string> = {
+  概念不清: '#ef4444',
+  计算失误: '#f97316',
+  审题看漏: '#eab308',
+  时间不够: '#8b5cf6',
+  公式记错: '#3b82f6',
+  方法没想到: '#14b8a6',
+};
+
 /**
  * 首次启动写入的分类模板。
  * 数学二不考概率论与无穷级数；839 按王建辉《自动控制原理》第 2 版

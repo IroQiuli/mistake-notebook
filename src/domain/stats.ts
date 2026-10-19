@@ -250,8 +250,21 @@ export function accuracyByChapter(
   return accumulate(logs, problems, since, buckets, (p) => p.chapterId);
 }
 
-/** 指定科目下、某学习日到期的题目（首页「N 天后」用） */
-export function problemsDueOn(
+/** 错因分布：统计未掌握题目上的标签数量，按数量降序 */
+export function errorTagDistribution(problems: Problem[]): { tag: string; count: number }[] {
+  const map = new Map<string, number>();
+  for (const p of problems) {
+    if (p.archivedAt) continue;
+    for (const tag of p.errorTags ?? []) {
+      map.set(tag, (map.get(tag) ?? 0) + 1);
+    }
+  }
+  return [...map.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/** 指定科目下、某学习日到期的题目（首页「N 天后」用） */export function problemsDueOn(
   problems: Problem[],
   cards: Card[],
   offsetDays: number,

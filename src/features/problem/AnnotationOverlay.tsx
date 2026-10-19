@@ -19,6 +19,7 @@ export function AnnotationOverlay({ problemId, src, onClose }: AnnotationOverlay
   const surface = useRef<InkSurfaceHandle>(null);
   const [saving, setSaving] = useState(false);
   const [hint, setHint] = useState(true);
+  const [writing, setWriting] = useState(false);
 
   const close = async () => {
     setSaving(true);
@@ -56,31 +57,57 @@ export function AnnotationOverlay({ problemId, src, onClose }: AnnotationOverlay
             tool={tools.tool}
             color={tools.color}
             width={tools.width}
+            enabled={writing}
             onFirstStroke={() => setHint(false)}
           />
         </div>
-        {hint && (
-          <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-zinc-400">
-            用触屏笔或手指直接写；双指缩放请用「看整页」
-          </p>
+        {!writing ? (
+          <button
+            type="button"
+            onClick={() => setWriting(true)}
+            className="mx-auto mt-2 flex w-full max-w-3xl items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-white py-3 text-sm text-zinc-600 active:bg-zinc-50"
+          >
+            ✍️ 开启手写（当前可上下滑动）
+          </button>
+        ) : (
+          hint && (
+            <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-zinc-400">
+              用触屏笔或手指直接写；再点一次工具栏的「结束手写」可恢复滑动
+            </p>
+          )
         )}
       </div>
 
       <div className={cn('border-t border-zinc-200 bg-white p-2 safe-bottom')}>
         <div className="mx-auto max-w-3xl">
-          <InkToolbar
-            tool={tools.tool}
-            color={tools.color}
-            width={tools.width}
-            onToolChange={tools.setTool}
-            onColorChange={tools.setColor}
-            onWidthChange={tools.setWidth}
-            onUndo={() => surface.current?.undo()}
-            onRedo={() => surface.current?.redo()}
-            onClear={() => {
-              if (window.confirm('清空这一页的笔迹？')) surface.current?.clear();
-            }}
-          />
+          {writing ? (
+            <div className="space-y-1">
+              <InkToolbar
+                tool={tools.tool}
+                color={tools.color}
+                width={tools.width}
+                onToolChange={tools.setTool}
+                onColorChange={tools.setColor}
+                onWidthChange={tools.setWidth}
+                onUndo={() => surface.current?.undo()}
+                onRedo={() => surface.current?.redo()}
+                onClear={() => {
+                  if (window.confirm('清空这一页的笔迹？')) surface.current?.clear();
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setWriting(false)}
+                className="w-full py-1 text-center text-[11px] text-zinc-400"
+              >
+                结束手写
+              </button>
+            </div>
+          ) : (
+            <p className="py-1 text-center text-[11px] text-zinc-400">
+              点上方「开启手写」后，这里的工具栏才会出现
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -11,6 +11,36 @@ import { Dialog } from '../../ui/Dialog';
 import { EmptyState } from '../../ui/EmptyState';
 import { cn } from '../../ui/cn';
 
+function GoalRing({ done, goal }: { done: number; goal: number }) {
+  const pct = Math.min(1, done / Math.max(1, goal));
+  const radius = 26;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <div className="relative h-16 w-16 shrink-0">
+      <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90">
+        <circle cx="32" cy="32" r={radius} fill="none" stroke="#e4e4e7" strokeWidth="6" />
+        {pct > 0 && (
+          <circle
+            cx="32"
+            cy="32"
+            r={radius}
+            fill="none"
+            stroke="#f97316"
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={`${pct * circumference} ${circumference}`}
+            className="transition-[stroke-dasharray] duration-500"
+          />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-sm font-semibold tabular-nums text-zinc-900">{done}</span>
+        <span className="text-[9px] text-zinc-400">/ {goal}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function TodayPage() {
   const navigate = useNavigate();
   const problems = useLiveQuery(() => db.problems.toArray(), [], []);
@@ -36,6 +66,7 @@ export default function TodayPage() {
   const todayReviewed = logs.filter((l) => dayKey(l.reviewedAt) === dayKey(now)).length;
   const weekReviewed = logs.filter((l) => l.reviewedAt >= now - 7 * 24 * 3600 * 1000).length;
   const activeCount = problems.filter((p) => !p.archivedAt).length;
+  const dailyGoal = useLiveQuery(() => getSetting<number>('dailyGoal', 20), [], 20);
 
   const chapterMap = useMemo(() => new Map(chapters.map((c) => [c.id, c])), [chapters]);
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
@@ -133,6 +164,21 @@ export default function TodayPage() {
               ))}
           </div>
         )}
+      </section>
+
+      <section className="flex items-center gap-4 rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+        <GoalRing done={todayReviewed} goal={dailyGoal} />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-zinc-800">今日目标</div>
+          <div className="mt-0.5 text-[11px] text-zinc-500">
+            {todayReviewed >= dailyGoal
+              ? `已完成，多做了 ${todayReviewed - dailyGoal} 题`
+              : `还差 ${dailyGoal - todayReviewed} 题`}
+          </div>
+        </div>
+        <Link to="/settings" className="shrink-0 text-[11px] text-zinc-400">
+          调整
+        </Link>
       </section>
 
       <section className="grid grid-cols-3 gap-2.5">

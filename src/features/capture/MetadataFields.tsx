@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Plus } from 'lucide-react';
-import type { Chapter, Subject, Topic } from '../../domain/types';
+import type { Chapter, SourceKind, Subject, Topic } from '../../domain/types';
+import { ERROR_TAGS } from '../../domain/taxonomy';
 import { createChapter, createTopic } from '../../storage/problems';
 import { cn } from '../../ui/cn';
 import { Button } from '../../ui/Button';
@@ -13,7 +14,9 @@ export interface MetaValue {
   sourceYear?: number;
   sourcePaper?: string;
   sourceNo?: string;
+  sourceKind?: SourceKind;
   wrongNote: string;
+  errorTags: string[];
 }
 
 interface MetadataFieldsProps {
@@ -87,7 +90,15 @@ export function MetadataFields({
   const extraCount =
     value.topicIds.length +
     (value.wrongNote ? 1 : 0) +
+    (value.errorTags?.length ?? 0) +
     (value.sourceYear || value.sourcePaper || value.sourceNo ? 1 : 0);
+
+  const toggleErrorTag = (tag: string) => {
+    const list = value.errorTags ?? [];
+    set({
+      errorTags: list.includes(tag) ? list.filter((t) => t !== tag) : [...list, tag],
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -266,11 +277,46 @@ export function MetadataFields({
               <span className="mb-1.5 block text-xs font-medium text-zinc-500">卷子 / 讲义</span>
               <input
                 value={value.sourcePaper ?? ''}
-                onChange={(e) => set({ sourcePaper: e.target.value })}
+                onChange={(e) => {
+                  const paper = e.target.value;
+                  // 老用户习惯直接写「2023真题」，这里顺手打上结构化类型
+                  const autoKind: Partial<MetaValue> =
+                    !value.sourceKind && /真题|统考/.test(paper)
+                      ? { sourceKind: '真题' }
+                      : {};
+                  set({ sourcePaper: paper, ...autoKind });
+                }}
                 placeholder="真题 / 李林四套 / 第3章"
                 className={inputCls}
               />
             </label>
+          </div>
+
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-zinc-500">来源类型</span>
+            <div className="flex flex-wrap gap-1.5">
+              {(['真题', '模拟题', '讲义', '其他'] as SourceKind[]).map((kind) => {
+                const active = value.sourceKind === kind;
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => set({ sourceKind: active ? undefined : kind })}
+                    className={cn(
+                      'rounded-lg border px-2.5 py-1 text-xs',
+                      active
+                        ? 'border-orange-300 bg-orange-50 text-orange-600'
+                        : 'border-zinc-200 text-zinc-600'
+                    )}
+                  >
+                    {kind}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-[10px] text-zinc-400">
+              选「真题」后，可以在错题本筛选的「真题」分支里按年份找到它。
+            </p>
           </div>
 
           <label className="block">
@@ -282,6 +328,30 @@ export function MetadataFields({
               className={inputCls}
             />
           </label>
+
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-zinc-500">错因标签</span>
+            <div className="flex flex-wrap gap-1.5">
+              {ERROR_TAGS.map((tag) => {
+                const active = (value.errorTags ?? []).includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleErrorTag(tag)}
+                    className={cn(
+                      'rounded-lg border px-2.5 py-1 text-xs',
+                      active
+                        ? 'border-orange-300 bg-orange-50 text-orange-600'
+                        : 'border-zinc-200 text-zinc-600'
+                    )}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <label className="block">
             <span className="mb-1.5 block text-xs font-medium text-zinc-500">我的错误原因</span>

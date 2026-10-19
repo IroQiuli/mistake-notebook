@@ -60,6 +60,8 @@ const seeded = await page.evaluate(async () => {
     return seed / 2147483648;
   };
 
+  const tags = ['概念不清', '计算失误', '审题看漏', '时间不够', '公式记错', '方法没想到'];
+
   chapters.forEach(([chapterId, subjectId], ci) => {
     const count = 2 + (ci % 3);
     for (let i = 0; i < count; i++) {
@@ -70,6 +72,9 @@ const seeded = await page.evaluate(async () => {
       const due = archived
         ? now + 400 * DAY
         : lastReview + Math.max(1, Math.round(stability)) * DAY;
+      const errorTags = [tags[Math.floor(rnd() * tags.length)]];
+      if (rnd() < 0.35) errorTags.push(tags[Math.floor(rnd() * tags.length)]);
+      const isReal = rnd() < 0.6;
       problems.push({
         id,
         subjectId,
@@ -79,6 +84,9 @@ const seeded = await page.evaluate(async () => {
         answerAssetIds: [],
         wrongNote: '演示数据',
         difficulty: 1 + Math.floor(rnd() * 5),
+        sourceKind: isReal ? '真题' : rnd() < 0.5 ? '模拟题' : undefined,
+        sourceYear: isReal ? 2020 + Math.floor(rnd() * 5) : undefined,
+        errorTags,
         createdAt: now - Math.floor(rnd() * 60) * DAY,
         updatedAt: now,
         archivedAt: archived ? now - DAY : undefined,
@@ -159,6 +167,23 @@ await page.screenshot({ path: path.join(SHOTS, '32-stats-desktop.png'), fullPage
 await page.getByTestId('accuracy-subject').first().click();
 await page.waitForTimeout(400);
 await page.screenshot({ path: path.join(SHOTS, '34-accuracy-chapters.png'), fullPage: true });
+
+// 筛选：真题分支
+await page.setViewportSize({ width: 390, height: 844 });
+await page.goto(BASE + '/#/library');
+await page.waitForTimeout(700);
+await page.getByRole('button', { name: /筛选/ }).click();
+await page.waitForTimeout(400);
+const dlg = page.getByRole('dialog');
+await dlg.getByRole('button', { name: /历年金题/ }).click();
+await page.waitForTimeout(300);
+await page.screenshot({ path: path.join(SHOTS, '35-filter-real.png'), fullPage: true });
+await dlg.getByRole('button', { name: '全部真题' }).click();
+await page.waitForTimeout(200);
+await dlg.getByRole('button', { name: '应用' }).click();
+await page.waitForTimeout(700);
+const realRows = await page.locator('a[href*="/problem/"]').count();
+console.log('real exam rows:', realRows);
 
 console.log('errors:', JSON.stringify(errors, null, 2));
 await browser.close();

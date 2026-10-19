@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronDown, Download, HardDrive, Plus, Upload } from 'lucide-react';
-import { db, getSetting } from '../../storage/db';
+import { db, getSetting, setSetting } from '../../storage/db';
 import {
   backupFilename,
   downloadBlob,
@@ -32,6 +32,7 @@ export default function SettingsPage() {
   const importRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [pendingImport, setPendingImport] = useState<File | null>(null);
+  const [goalInput, setGoalInput] = useState('20');
   const [usage, setUsage] = useState<{ usage: number; quota: number }>({ usage: 0, quota: 0 });
   const [openSubject, setOpenSubject] = useState<string | null>(null);
   const [newChapter, setNewChapter] = useState('');
@@ -49,6 +50,12 @@ export default function SettingsPage() {
   useEffect(() => {
     refreshUsage();
   }, [problems, assets]);
+
+  useEffect(() => {
+    getSetting<number>('dailyGoal', 20)
+      .then((v) => setGoalInput(String(v)))
+      .catch(() => {});
+  }, []);
 
   const doExport = async () => {
     setBusy(true);
@@ -160,6 +167,37 @@ export default function SettingsPage() {
         </p>
       </Section>
 
+      <Section title="学习目标">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-zinc-700">每天复习</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={200}
+            value={goalInput}
+            onChange={(e) => setGoalInput(e.target.value.replace(/\D/g, '').slice(0, 3))}
+            className="h-9 w-16 rounded-lg border border-zinc-200 px-2 text-center text-sm outline-none focus:border-orange-300"
+          />
+          <span className="text-sm text-zinc-500">题</span>
+          <Button
+            size="sm"
+            className="ml-auto"
+            onClick={async () => {
+              const n = Math.min(200, Math.max(1, Number(goalInput) || 20));
+              await setSetting('dailyGoal', n);
+              setGoalInput(String(n));
+              toast.show('已保存目标', 'success');
+            }}
+          >
+            保存
+          </Button>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+          首页会显示今日进度环。目标只做提醒，不会改变复习排期。
+        </p>
+      </Section>
+
       <Section title="分类">
         <div className="space-y-1">
           {subjects.map((s) => {
@@ -221,7 +259,7 @@ export default function SettingsPage() {
           <p>错题簿 v0.1.0 · 本地优先的考研错题复习工具</p>
           <p>排期算法：FSRS-5，目标保留率 90%</p>
           <p>学习日边界：每天 04:00（凌晨复习算前一天）</p>
-          <p>当前 M1：录入、错题本、复习、备份。手写批注与 PDF 截题在后续版本。</p>
+          <p>当前版本：录入（拍照/相册/PDF）、手写批注、FSRS 复习、统计与备份。</p>
         </div>
       </Section>
 

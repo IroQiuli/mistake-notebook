@@ -133,7 +133,9 @@ export default function ProblemPage() {
     sourceYear: problem.sourceYear,
     sourcePaper: problem.sourcePaper,
     sourceNo: problem.sourceNo,
+    sourceKind: problem.sourceKind,
     wrongNote: problem.wrongNote,
+    errorTags: problem.errorTags ?? [],
   };
 
   return (
@@ -290,17 +292,38 @@ export default function ProblemPage() {
         </div>
       )}
 
-      {problem.wrongNote && (
+      {(problem.wrongNote || (problem.errorTags?.length ?? 0) > 0) && (
         <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
           <h2 className="text-xs font-medium text-amber-800">当时为什么错</h2>
-          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-amber-900">
-            {problem.wrongNote}
-          </p>
+          {(problem.errorTags?.length ?? 0) > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {problem.errorTags!.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-700"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+          {problem.wrongNote && (
+            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-amber-900">
+              {problem.wrongNote}
+            </p>
+          )}
         </section>
       )}
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4">
-        <h2 className="text-xs font-medium text-zinc-500">来源</h2>
+        <h2 className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
+          来源
+          {problem.sourceKind && (
+            <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-600">
+              {problem.sourceKind}
+            </span>
+          )}
+        </h2>
         <p className="mt-1 text-sm text-zinc-800">
           {[problem.sourceYear, problem.sourcePaper, problem.sourceNo]
             .filter(Boolean)

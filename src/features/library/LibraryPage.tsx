@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, Search, SlidersHorizontal } from 'lucide-react';
 import { db } from '../../storage/db';
-import { countActiveFilters, filterProblems, type ProblemFilter } from '../../domain/filter';
+import { countActiveFilters, filterProblems, isRealExam, type ProblemFilter } from '../../domain/filter';
 import { learningDayEnd } from '../../domain/time';
 import { Button } from '../../ui/Button';
 import { EmptyState } from '../../ui/EmptyState';
@@ -60,6 +60,20 @@ export default function LibraryPage() {
         (a, b) => b - a
       ),
     [problems]
+  );
+
+  const realProblems = useMemo(
+    () => problems.filter((p) => !p.archivedAt && isRealExam(p)),
+    [problems]
+  );
+  const realYears = useMemo(
+    () =>
+      [
+        ...new Set(
+          realProblems.map((p) => p.sourceYear).filter((y): y is number => Boolean(y))
+        ),
+      ].sort((a, b) => b - a),
+    [realProblems]
   );
 
   const merged = useMemo<ProblemFilter>(
@@ -203,6 +217,8 @@ export default function LibraryPage() {
         topics={topics}
         subjectId={subjectId}
         years={years}
+        realCount={realProblems.length}
+        realYears={realYears}
       />
     </div>
   );

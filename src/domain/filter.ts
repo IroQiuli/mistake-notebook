@@ -8,6 +8,17 @@ export interface ProblemFilter {
   difficulty?: number[];
   status?: ProblemStatus;
   years?: number[];
+  /** 只看真题 */
+  realOnly?: boolean;
+}
+
+/**
+ * 是否真题：优先看结构化字段；老数据没有字段时，
+ * 退化为「卷子/讲义里写了真题」。
+ */
+export function isRealExam(p: Problem): boolean {
+  if (p.sourceKind) return p.sourceKind === '真题';
+  return /真题|统考/.test(p.sourcePaper ?? '');
 }
 
 export interface FilterContext {
@@ -32,6 +43,7 @@ export function filterProblems(
     if (f.topicIds?.length && !f.topicIds.every((t) => p.topicIds.includes(t))) return false;
     if (f.difficulty?.length && !f.difficulty.includes(p.difficulty)) return false;
     if (f.years?.length && (!p.sourceYear || !f.years.includes(p.sourceYear))) return false;
+    if (f.realOnly && !isRealExam(p)) return false;
 
     const status = f.status ?? 'all';
     if (status === 'archived' && !p.archivedAt) return false;
@@ -65,5 +77,6 @@ export function countActiveFilters(f: ProblemFilter): number {
   if (f.difficulty?.length) n++;
   if (f.status && f.status !== 'all') n++;
   if (f.years?.length) n++;
+  if (f.realOnly) n++;
   return n;
 }

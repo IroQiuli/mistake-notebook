@@ -35,12 +35,14 @@ interface InkSurfaceProps {
   /** 只展示、不接收输入的旧笔迹（复习时切换显示） */
   backgroundStrokes?: Stroke[];
   readOnly?: boolean;
+  /** 手写模式总开关：关闭时画布不拦截触摸，页面可以正常滚动 */
+  enabled?: boolean;
 }
 
-const ERASER_RADIUS = 0.018;
+const ERASER_RADIUS_PX = 18;
 
 export const InkSurface = forwardRef<InkSurfaceHandle, InkSurfaceProps>(function InkSurface(
-  { src, aspect = 3 / 4, strokes, onChange, tool, color, width, className, alt, onFirstStroke, backgroundStrokes, readOnly },
+  { src, aspect = 3 / 4, strokes, onChange, tool, color, width, className, alt, onFirstStroke, backgroundStrokes, readOnly, enabled = true },
   ref
 ) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -53,6 +55,7 @@ export const InkSurface = forwardRef<InkSurfaceHandle, InkSurfaceProps>(function
   const pointersRef = useRef<Set<number>>(new Set());
   const lastPenAt = useRef(0);
   const erasingRef = useRef(false);
+  const lastErasePoint = useRef<{ x: number; y: number } | null>(null);
   const redoRef = useRef<Stroke[]>([]);
 
   const redraw = useCallback(() => {
@@ -118,18 +121,31 @@ export const InkSurface = forwardRef<InkSurfaceHandle, InkSurfaceProps>(function
     return 0.5;
   };
 
-  const eraseAt = (p: InkPoint) => {
-    const hit = hitTest(strokesRef.current, p[0], p[1], ERASER_RADIUS);
-    if (hit) {
-      strokesRef.current = strokesRef.current.filter((s) => s.id !== hit.id);
-      redoRef.current = [];
-      onChange(strokesRef.current);
-      redraw();
+  const eraseAt = (clientX: number, clientY: number) => {
+    const { w, h } = sizeRef.current;
+    if (!w || !h) return;
+    const p = toNorm(clientX, clientY);
+    const rx = ERASER_RADIUS_PX / w;
+    const ry = ERASER_RADIUS_PX / h;
+    const hits = hitTest(strokesRef.current, p[0], p[1], rx, ry);
+    if (hits.length === 0) return;
+    strokesRef.current = strokesRef.current.filter((s) => !hits.includes(s.id));
+    redoRef.current = [];
+    onChange(strokesRef.current);
+    redraw();
+  };
+
+  /** 手指/笔移动很快时按 8px 步长补点，避免橡皮「跳过」笔画 */
+  const eraseAlong = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    const dist = Math.hypot(to.x - from.x, to.y - from.y);
+    const steps = Math.max(1, Math.ceil(dist / 8));
+    for (let i = 1; i <= steps; i++) {
+      eraseAt(from.x + ((to.x - from.x) * i) / steps, from.y + ((to.y - from.y) * i) / steps);
     }
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (readOnly) return;
+    if (readOnly || !enabled) return;
     const native = e.nativeEvent;
     if (native.pointerType === 'touch' && Date.now() - lastPenAt.current < 1000) return;
     if (native.pointerType === 'pen') lastPenAt.current = Date.now();
@@ -147,7 +163,8 @@ export const InkSurface = forwardRef<InkSurfaceHandle, InkSurfaceProps>(function
 
     if (tool === 'eraser') {
       erasingRef.current = true;
-      eraseAt(p);
+      lastErasePoint.current = { x: native.clientX, y: native.clientY };
+      eraseAt(native.clientX, native.clientY);
       return;
     }
 
@@ -162,11 +179,15 @@ export const InkSurface = forwardRef<InkSurfaceHandle, InkSurfaceProps>(function
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!enabled) return;
     const native = e.nativeEvent;
     if (!pointersRef.current.has(native.pointerId)) return;
 
     if (erasingRef.current) {
-      eraseAt(toNorm(native.clientX, native.clientY));
+      if (lastErasePoint.current) {
+        eraseAlong(lastErasePoint.current, { x: native.clientX, y: native.clientY });
+      }
+      lastErasePoint.current = { x: native.clientX, y: native.clientY };
       return;
     }
 
@@ -191,6 +212,7 @@ export const InkSurface = forwardRef<InkSurfaceHandle, InkSurfaceProps>(function
     const stroke = currentRef.current;
     currentRef.current = null;
     erasingRef.current = false;
+    lastErasePoint.current = null;
     if (!stroke || cancel) return;
     stroke.points = simplify(stroke.points);
     strokesRef.current = [...strokesRef.current, stroke];
@@ -250,7 +272,7 @@ export const InkSurface = forwardRef<InkSurfaceHandle, InkSurfaceProps>(function
       <canvas
         ref={canvasRef}
         className="ink-canvas absolute inset-0 h-full w-full"
-        style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
+        style={{ pointerEvents: readOnly || !enabled ? 'none' : 'auto' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

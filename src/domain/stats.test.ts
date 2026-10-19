@@ -5,6 +5,7 @@ import {
   calcStreak,
   chapterMastery,
   dailyCounts,
+  errorTagDistribution,
   forecast,
   overallRetention,
   problemsDueOn,
@@ -230,8 +231,25 @@ describe('正确率统计', () => {
   });
 });
 
-describe('problemsDueOn', () => {
-  it('只取指定学习日到期、未归档的题', () => {
+describe('errorTagDistribution', () => {
+  it('只统计未掌握题目的标签，按数量降序', () => {
+    const list: Problem[] = [
+      { ...problem('p1', 'c1'), errorTags: ['概念不清', '计算失误'] },
+      { ...problem('p2', 'c1'), errorTags: ['概念不清'] },
+      { ...problem('p3', 'c1', true), errorTags: ['概念不清', '审题看漏'] },
+    ];
+    expect(errorTagDistribution(list)).toEqual([
+      { tag: '概念不清', count: 2 },
+      { tag: '计算失误', count: 1 },
+    ]);
+  });
+
+  it('没有标签时返回空数组', () => {
+    expect(errorTagDistribution([problem('p1', 'c1')])).toEqual([]);
+  });
+});
+
+describe('problemsDueOn', () => {  it('只取指定学习日到期、未归档的题', () => {
     const problems = [
       problem('p1', 'c1'),
       problem('p2', 'c1'),

@@ -42,6 +42,9 @@ export interface Topic {
   usageCount: number;
 }
 
+/** 题目来源类型；「真题」在筛选里单独成一支 */
+export type SourceKind = '真题' | '模拟题' | '讲义' | '其他';
+
 export interface Problem {
   id: ID;
   subjectId: ID;
@@ -60,6 +63,10 @@ export interface Problem {
   sourceYear?: number;
   sourcePaper?: string;
   sourceNo?: string;
+  /** 来源类型：真题 / 模拟题 / 讲义 / 其他 */
+  sourceKind?: SourceKind;
+  /** 错因标签，见 ERROR_TAGS */
+  errorTags?: string[];
 
   createdAt: number;
   updatedAt: number;

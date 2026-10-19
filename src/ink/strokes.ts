@@ -39,48 +39,67 @@ export function strokeBounds(stroke: Stroke): Bounds {
   return { minX, minY, maxX, maxY };
 }
 
-function distanceToSegment(
+function closestPointOnSegment(
   px: number,
   py: number,
   ax: number,
   ay: number,
   bx: number,
   by: number
-): number {
+): { x: number; y: number } {
   const dx = bx - ax;
   const dy = by - ay;
   const len2 = dx * dx + dy * dy;
-  if (len2 === 0) return Math.hypot(px - ax, py - ay);
+  if (len2 === 0) return { x: ax, y: ay };
   let t = ((px - ax) * dx + (py - ay) * dy) / len2;
   t = Math.max(0, Math.min(1, t));
-  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  return { x: ax + t * dx, y: ay + t * dy };
 }
 
-/** 橡皮命中判定：点到任一折线段距离小于半径（坐标均为归一化） */
-export function hitTestStroke(stroke: Stroke, x: number, y: number, radius: number): boolean {
+/**
+ * 橡皮命中判定：归一化坐标下用椭圆距离。
+ * 因为 x、y 的归一化分母分别是图片宽高，用同一个半径会让竖向和横向手感不一致；
+ * 所以分别传入 rx / ry（都由像素半径换算而来）。
+ */
+export function hitTestStroke(
+  stroke: Stroke,
+  x: number,
+  y: number,
+  rx: number,
+  ry = rx
+): boolean {
   const b = strokeBounds(stroke);
-  if (x < b.minX - radius || x > b.maxX + radius) return false;
-  if (y < b.minY - radius || y > b.maxY + radius) return false;
+  if (x < b.minX - rx || x > b.maxX + rx) return false;
+  if (y < b.minY - ry || y > b.maxY + ry) return false;
+
+  const inside = (cx: number, cy: number) => {
+    const dx = (x - cx) / rx;
+    const dy = (y - cy) / ry;
+    return dx * dx + dy * dy <= 1;
+  };
+
   const pts = stroke.points;
-  if (pts.length === 1) return Math.hypot(x - pts[0][0], y - pts[0][1]) <= radius;
+  if (pts.length === 1) return inside(pts[0][0], pts[0][1]);
   for (let i = 0; i < pts.length - 1; i++) {
-    if (distanceToSegment(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]) <= radius) {
-      return true;
-    }
+    const p = closestPointOnSegment(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]);
+    if (inside(p.x, p.y)) return true;
   }
   return false;
 }
 
+/** 橡皮擦：返回被命中笔画的 id（可能同时命中多条） */
 export function hitTest(
   strokes: Stroke[],
   x: number,
   y: number,
-  radius: number
-): Stroke | undefined {
+  rx: number,
+  ry: number = rx
+): string[] {
+  const hits: string[] = [];
   for (let i = strokes.length - 1; i >= 0; i--) {
-    if (hitTestStroke(strokes[i], x, y, radius)) return strokes[i];
+    if (hitTestStroke(strokes[i], x, y, rx, ry)) hits.push(strokes[i].id);
   }
-  return undefined;
+  return hits;
 }
 
 /** 笔宽换算成像素：width 存的是相对画布宽度的比例 */

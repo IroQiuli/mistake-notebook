@@ -1,6 +1,7 @@
 import { db } from './db';
 import { newId } from '../lib/id';
 import { newCard } from '../domain/scheduler';
+import { learningDayEnd } from '../domain/time';
 import type { Chapter, Problem, Topic } from '../domain/types';
 
 export type ProblemInput = Omit<
@@ -59,6 +60,38 @@ export async function reschedule(id: string, due: number): Promise<void> {
     due,
     scheduledDays: Math.max(0, Math.round((due - now) / 86400000)),
   });
+}
+
+/**
+ * 章节加练：把该章节里「还没到期」的题提前拉到今天，最多 limit 道。
+ * 优先挑记忆最弱的（stability 最小），不影响 FSRS 参数。
+ */
+export async function practiceChapter(chapterId: string, limit = 5): Promise<number> {
+  const now = Date.now();
+  const end = learningDayEnd(now);
+  const problems = await db.problems.where('chapterId').equals(chapterId).toArray();
+  const active = problems.filter((p) => !p.archivedAt);
+  if (active.length === 0) return 0;
+
+  const cards = await db.cards.bulkGet(active.map((p) => p.id));
+  const candidates: { id: string; stability: number }[] = [];
+  active.forEach((p, i) => {
+    const card = cards[i];
+    if (!card) return;
+    if (card.due <= end) return; // 今天已经在队列里了
+    candidates.push({ id: p.id, stability: card.stability });
+  });
+
+  candidates.sort((a, b) => a.stability - b.stability);
+  const picked = candidates.slice(0, limit);
+  if (picked.length === 0) return 0;
+
+  await db.transaction('rw', db.cards, async () => {
+    for (const c of picked) {
+      await db.cards.update(c.id, { due: now });
+    }
+  });
+  return picked.length;
 }
 
 export async function createChapter(subjectId: string, name: string): Promise<Chapter> {
