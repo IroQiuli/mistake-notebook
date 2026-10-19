@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, ChevronDown } from 'lucide-react';
 import { db } from '../../storage/db';
 import {
+  accuracyByChapter,
+  accuracyBySubject,
   calcStreak,
   chapterMastery,
   dailyCounts,
@@ -156,7 +158,9 @@ export default function StatsPage() {
   const subjects = useLiveQuery(() => db.subjects.orderBy('order').toArray(), [], []);
 
   const [subjectFilter, setSubjectFilter] = useState<string | undefined>(undefined);
+  const [expandedAccuracy, setExpandedAccuracy] = useState<string | null>(null);
   const now = Date.now();
+  const since30 = learningDayStart(now) - 30 * 86400000;
 
   const counts = useMemo(() => dailyCounts(logs, now, WEEKS * 7), [logs, now]);
   const forecastDays = useMemo(() => forecast(cards, problems, now, 14), [cards, problems, now]);
@@ -170,6 +174,22 @@ export default function StatsPage() {
     [logs, now]
   );
   const streak = useMemo(() => calcStreak(logs, now), [logs, now]);
+
+  const accSubjects = useMemo(
+    () => accuracyBySubject(logs, problems, subjects, since30),
+    [logs, problems, subjects, since30]
+  );
+  const accChapters = useMemo(
+    () => accuracyByChapter(logs, problems, chapters, since30),
+    [logs, problems, chapters, since30]
+  );
+  const accTotals = accSubjects.reduce(
+    (acc, s) => ({ total: acc.total + s.total, remembered: acc.remembered + s.remembered }),
+    { total: 0, remembered: 0 }
+  );
+  const overallAccuracy = accTotals.total ? accTotals.remembered / accTotals.total : 0;
+
+  const chapterMap = useMemo(() => new Map(chapters.map((c) => [c.id, c])), [chapters]);
 
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const visibleMastery = mastery.filter((m) => !subjectFilter || m.subjectId === subjectFilter);
@@ -205,7 +225,10 @@ export default function StatsPage() {
           { label: '累计复习', value: logs.length },
           { label: '今天到期', value: dueToday },
           { label: '平均保持率', value: `${Math.round(retention * 100)}%` },
-          { label: '近30天记得', value: `${dist[3] + dist[4] > 0 ? Math.round(((dist[3] + dist[4]) / Math.max(1, dist[1] + dist[2] + dist[3] + dist[4])) * 100) : 0}%` },
+          {
+            label: '近30天正确率',
+            value: accTotals.total ? `${Math.round(overallAccuracy * 100)}%` : '—',
+          },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border border-zinc-200 bg-white px-2 py-2.5">
             <div className="text-base font-semibold tabular-nums text-zinc-900">{s.value}</div>
@@ -217,6 +240,100 @@ export default function StatsPage() {
       <Heatmap counts={counts} />
 
       <Forecast days={forecastDays} onPick={() => navigate('/review')} />
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-zinc-800">回忆正确率</h2>
+          <span className="text-[10px] text-zinc-400">近 30 天 · 点科目展开章节</span>
+        </div>
+
+        {accSubjects.length === 0 ? (
+          <p className="py-4 text-center text-xs text-zinc-400">近 30 天还没有评分记录</p>
+        ) : (
+          <ul className="space-y-2">
+            {accSubjects.map((s) => {
+              const open = expandedAccuracy === s.id;
+              const children = accChapters
+                .filter((c) => chapterMap.get(c.id)?.subjectId === s.id)
+                .sort((a, b) => a.rate - b.rate);
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    data-testid="accuracy-subject"
+                    onClick={() => setExpandedAccuracy(open ? null : s.id)}
+                    className="w-full text-left"
+                  >
+                    <div className="flex items-baseline justify-between">
+                      <span className="flex items-center gap-1.5 text-xs text-zinc-700">
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: s.color }}
+                        />
+                        {s.name.replace('839 自动控制原理及过程控制', '839 自控')}
+                        <ChevronDown
+                          size={12}
+                          className={cn(
+                            'text-zinc-300 transition-transform',
+                            open && 'rotate-180'
+                          )}
+                        />
+                      </span>
+                      <span className="text-xs">
+                        <span className="font-medium tabular-nums text-zinc-900">
+                          {Math.round(s.rate * 100)}%
+                        </span>
+                        <span className="ml-1 text-[10px] text-zinc-400">{s.total} 次</span>
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100">
+                      <div
+                        className={cn('h-full rounded-full', masteryColor(s.rate))}
+                        style={{ width: `${Math.max(3, s.rate * 100)}%` }}
+                      />
+                    </div>
+                  </button>
+
+                  {open && (
+                    <ul className="ml-2 mt-1.5 space-y-1.5 border-l border-zinc-100 pl-3">
+                      {children.length === 0 && (
+                        <li className="text-[10px] text-zinc-400">这个科目还没有复习记录</li>
+                      )}
+                      {children.map((c) => (
+                        <li key={c.id}>
+                          <div className="flex items-baseline justify-between">
+                            <span className="truncate text-[11px] text-zinc-600">{c.name}</span>
+                            <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">
+                              {Math.round(c.rate * 100)}%
+                              <span className="ml-1 text-[9px] text-zinc-300">{c.total}</span>
+                            </span>
+                          </div>
+                          <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-zinc-100">
+                            <div
+                              className={cn('h-full rounded-full', masteryColor(c.rate))}
+                              style={{ width: `${Math.max(3, c.rate * 100)}%` }}
+                            />
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-zinc-400">
+          <span>忘记 {dist[1]}</span>
+          <span>模糊 {dist[2]}</span>
+          <span>记得 {dist[3]}</span>
+          <span>熟练 {dist[4]}</span>
+        </div>
+        <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
+          正确率 = 自评「记得 / 熟练」的次数占比；评「忘记 / 模糊」都算这次没回忆起来。
+        </p>
+      </section>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="mb-2 flex items-center justify-between">

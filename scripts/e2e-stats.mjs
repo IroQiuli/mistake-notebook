@@ -138,7 +138,7 @@ const heatCells = await page.locator('div[title*="次"]').count();
 const bars = await page.locator('section').nth(2).locator('div[style*="height"]').count();
 console.log('heat cells:', heatCells, '| forecast bars:', bars);
 
-await page.getByRole('button', { name: '839 自控' }).click();
+await page.getByRole('button', { name: '839 自控', exact: true }).click();
 await page.waitForTimeout(500);
 await page.screenshot({ path: path.join(SHOTS, '31-stats-subject.png'), fullPage: true });
 
@@ -154,6 +154,11 @@ await page.setViewportSize({ width: 1280, height: 900 });
 await page.goto(BASE + '/#/stats');
 await page.waitForTimeout(600);
 await page.screenshot({ path: path.join(SHOTS, '32-stats-desktop.png'), fullPage: true });
+
+// 正确率按科目展开到章节
+await page.getByTestId('accuracy-subject').first().click();
+await page.waitForTimeout(400);
+await page.screenshot({ path: path.join(SHOTS, '34-accuracy-chapters.png'), fullPage: true });
 
 console.log('errors:', JSON.stringify(errors, null, 2));
 await browser.close();

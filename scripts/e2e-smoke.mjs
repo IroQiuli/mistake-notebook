@@ -78,7 +78,7 @@ await shot('02-capture-pick.png');
 
 const fileInputs = page.locator('input[type=file]');
 await fileInputs.nth(1).setInputFiles('scripts/fixture-question.png');
-await page.waitForSelector('text=在题目上拖出选区，整页都在框里也可以', { timeout: 15000 });
+await page.getByTestId('cropper').waitFor({ state: 'visible', timeout: 15000 });
 
 const box = await page.getByTestId('cropper').boundingBox();
 if (!box) throw new Error('找不到裁剪容器');
@@ -136,6 +136,27 @@ await page.getByRole('button', { name: '完成' }).click();
 await page.waitForTimeout(900);
 await shot('14-problem-annotated.png');
 console.log('inks after annotation:', JSON.stringify(await readInks()));
+
+// 6. 详情页：答案默认隐藏 + 点击放大 + 自定义改期
+await page.locator('input[type=file]').last().setInputFiles('scripts/fixture-question.png');
+await page.getByRole('button', { name: '显示答案' }).waitFor({ timeout: 15000 });
+const hiddenHint = await page.locator('text=答案已隐藏').count();
+await page.getByRole('button', { name: '显示答案' }).click();
+await page.waitForTimeout(400);
+await page.locator('img[alt="答案 1"]').click();
+await page.waitForTimeout(500);
+const answerDialog = await page.getByRole('dialog').count();
+await shot('19-answer-zoom.png', false);
+await page.keyboard.press('Escape');
+await page.waitForTimeout(400);
+
+await page.getByRole('button', { name: '改期' }).click();
+await page.waitForTimeout(300);
+await page.getByPlaceholder('例如 5').fill('5');
+await page.getByRole('button', { name: '确定' }).click();
+await page.waitForTimeout(700);
+const rescheduled = await page.locator('text=5 天后').count();
+console.log('answer hidden:', hiddenHint, '| zoom dialog:', answerDialog, '| 5天后:', rescheduled);
 
 // 7. 我的
 await page.goto(BASE + '/#/settings');

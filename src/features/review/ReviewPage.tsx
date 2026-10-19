@@ -14,8 +14,10 @@ import { InkToolbar } from '../../ink/InkToolbar';
 import { useInk } from '../../ink/useInk';
 import { useInkTools } from '../../ink/useInkTools';
 import { Button } from '../../ui/Button';
+import { Dialog } from '../../ui/Dialog';
 import { EmptyState } from '../../ui/EmptyState';
 import { PageLoading } from '../../ui/Spinner';
+import { ZoomableImage } from '../../ui/ZoomableImage';
 import { cn } from '../../ui/cn';
 import { useSession } from './useSession';
 
@@ -85,6 +87,7 @@ export default function ReviewPage() {
   const { queue, index, current, revealed, finished, summary, reveal, rate } = useSession(subjectId);
 
   const [showOldInk, setShowOldInk] = useState(false);
+  const [zoomUrl, setZoomUrl] = useState<string | null>(null);
   const problemId = current?.problem.id;
 
   const chapter = useLiveQuery(
@@ -263,12 +266,15 @@ export default function ReviewPage() {
           {answerUrls.length > 0 ? (
             <div className="flex gap-2 overflow-x-auto">
               {answerUrls.map((url, i) => (
-                <img
+                <button
                   key={i}
-                  src={url}
-                  alt={`答案 ${i + 1}`}
-                  className="h-44 w-auto rounded-lg border border-zinc-200 object-contain"
-                />
+                  type="button"
+                  onClick={() => setZoomUrl(url)}
+                  className="shrink-0 overflow-hidden rounded-lg border border-zinc-200 active:opacity-80"
+                  aria-label={`放大答案 ${i + 1}`}
+                >
+                  <img src={url} alt={`答案 ${i + 1}`} className="h-44 w-auto object-contain" />
+                </button>
               ))}
             </div>
           ) : (
@@ -323,6 +329,12 @@ export default function ReviewPage() {
           </div>
         )}
       </footer>
+
+      <Dialog open={zoomUrl !== null} onClose={() => setZoomUrl(null)} title="答案" size="lg">
+        {zoomUrl && (
+          <ZoomableImage src={zoomUrl} className="h-[70vh] w-full rounded-lg" alt="答案大图" />
+        )}
+      </Dialog>
     </div>
   );
 }

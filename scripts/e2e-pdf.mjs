@@ -32,8 +32,7 @@ await page.goto(BASE + '/#/capture', { waitUntil: 'networkidle' });
 await page.waitForTimeout(600);
 
 await page.locator('input[type=file]').nth(2).setInputFiles(PDF);
-await page.waitForSelector('input[type=number]', { timeout: 60000 });
-await page.waitForTimeout(2500);
+await page.waitForSelector('input[type=number]', { timeout: 60000 });await page.waitForTimeout(2500);
 await page.screenshot({ path: path.join(SHOTS, '20-pdf-picker.png') });
 
 const pageInput = page.locator('input[type=number]');
@@ -42,7 +41,7 @@ await page.waitForTimeout(2500);
 await page.screenshot({ path: path.join(SHOTS, '21-pdf-page5.png') });
 
 await page.getByRole('button', { name: /截取第 5 页/ }).click();
-await page.waitForSelector('text=在题目上拖出选区，整页都在框里也可以', { timeout: 30000 });
+await page.getByTestId('cropper').waitFor({ state: 'visible', timeout: 30000 });
 
 const box = await page.getByTestId('cropper').boundingBox();
 if (!box) throw new Error('找不到裁剪容器');

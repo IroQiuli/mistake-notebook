@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
+  accuracyByChapter,
+  accuracyBySubject,
   calcStreak,
   chapterMastery,
   dailyCounts,
   forecast,
   overallRetention,
+  problemsDueOn,
   ratingDistribution,
 } from './stats';
 import type { Card, Chapter, Problem, ReviewLog } from './types';
@@ -170,5 +173,76 @@ describe('calcStreak', () => {
       { reviewedAt: at('2026-10-17T10:00:00') },
     ];
     expect(calcStreak(logs, NOW)).toBe(1);
+  });
+});
+
+describe('正确率统计', () => {
+  const problems: Problem[] = [
+    problem('p1', 'c1'),
+    { ...problem('p2', 'c2'), subjectId: 's2' },
+  ];
+  const subjects = [
+    { id: 's1', name: '数学二', color: '#00f' },
+    { id: 's2', name: '839', color: '#f80' },
+  ];
+  const chapters: Chapter[] = [
+    { id: 'c1', subjectId: 's1', name: '矩阵', order: 0 },
+    { id: 'c2', subjectId: 's2', name: '根轨迹', order: 0 },
+  ];
+  const log = (problemId: string, rating: 0 | 1 | 2 | 3 | 4, daysAgo: number) => ({
+    problemId,
+    rating,
+    reviewedAt: NOW - daysAgo * 86400000,
+  });
+
+  it('按科目分开统计，记得/熟练算对', () => {
+    const logs = [
+      log('p1', 3, 1),
+      log('p1', 4, 2),
+      log('p1', 1, 3),
+      log('p2', 2, 1),
+      log('p2', 1, 2),
+    ];
+    const rows = accuracyBySubject(logs, problems, subjects, NOW - 30 * 86400000);
+    expect(rows).toHaveLength(2);
+    const math = rows.find((r) => r.id === 's1')!;
+    expect(math.total).toBe(3);
+    expect(math.remembered).toBe(2);
+    expect(math.rate).toBeCloseTo(2 / 3, 5);
+    const ctrl = rows.find((r) => r.id === 's2')!;
+    expect(ctrl.rate).toBe(0);
+    // 薄弱科目排前面
+    expect(rows[0].id).toBe('s2');
+  });
+
+  it('排除窗口外与手动改期（rating=0）的记录', () => {
+    const logs = [log('p1', 3, 60), log('p1', 0, 1)];
+    const rows = accuracyBySubject(logs, problems, subjects, NOW - 30 * 86400000);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('按章节细分', () => {
+    const logs = [log('p1', 3, 1), log('p1', 1, 2), log('p2', 4, 1)];
+    const rows = accuracyByChapter(logs, problems, chapters, NOW - 30 * 86400000);
+    const c1 = rows.find((r) => r.id === 'c1')!;
+    expect(c1.total).toBe(2);
+    expect(c1.rate).toBeCloseTo(0.5, 5);
+  });
+});
+
+describe('problemsDueOn', () => {
+  it('只取指定学习日到期、未归档的题', () => {
+    const problems = [
+      problem('p1', 'c1'),
+      problem('p2', 'c1'),
+      problem('p3', 'c1', true),
+    ];
+    const cards = [
+      card('p1', at('2026-10-22T10:00:00')),
+      card('p2', at('2026-10-22T23:30:00')),
+      card('p3', at('2026-10-22T10:00:00')),
+    ];
+    expect(problemsDueOn(problems, cards, 3, NOW).map((p) => p.id)).toEqual(['p1', 'p2']);
+    expect(problemsDueOn(problems, cards, 1, NOW)).toHaveLength(0);
   });
 });

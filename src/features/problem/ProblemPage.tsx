@@ -74,7 +74,9 @@ export default function ProblemPage() {
   const annotation = useInk('problem-stem', problem?.id ?? '', 0);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [answerIndex, setAnswerIndex] = useState(0);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [zoomAnswer, setZoomAnswer] = useState<number | null>(null);
+  const [customDays, setCustomDays] = useState('');
   const answerInput = useRef<HTMLInputElement>(null);
   const now = Date.now();
 
@@ -99,6 +101,28 @@ export default function ProblemPage() {
       answerAssetIds: [...problem.answerAssetIds, ...ids].slice(0, 6),
     });
     toast.show('已添加答案图', 'success');
+  };
+
+  const applyReschedule = async (days: number) => {
+    if (!Number.isFinite(days) || days < 0) return;
+    const base = new Date();
+    base.setHours(9, 0, 0, 0);
+    base.setDate(base.getDate() + days);
+    await reschedule(problem.id, base.getTime());
+    await db.reviewLogs.add({
+      id: newId(),
+      problemId: problem.id,
+      rating: 0,
+      reviewedAt: Date.now(),
+      durationMs: 0,
+      prevDue: card?.due ?? 0,
+      nextDue: base.getTime(),
+      prevState: card?.state ?? 0,
+      nextState: card?.state ?? 0,
+    });
+    setRescheduleOpen(false);
+    setCustomDays('');
+    toast.show(days === 0 ? '已安排到今天' : `已安排到 ${days} 天后`, 'success');
   };
 
   const editInitial: MetaValue = {
@@ -202,32 +226,44 @@ export default function ProblemPage() {
         <div className="rounded-2xl border border-zinc-200 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-medium text-zinc-500">
-              正确答案（{answerIndex + 1}/{answerUrls.length}）
+              正确答案（{answerUrls.length} 张）
             </span>
-            {answerUrls.length > 1 && (
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  className="rounded px-2 py-1 text-xs text-zinc-500 active:bg-zinc-100"
-                  onClick={() => setAnswerIndex((i) => (i - 1 + answerUrls.length) % answerUrls.length)}
-                >
-                  上一张
-                </button>
-                <button
-                  type="button"
-                  className="rounded px-2 py-1 text-xs text-zinc-500 active:bg-zinc-100"
-                  onClick={() => setAnswerIndex((i) => (i + 1) % answerUrls.length)}
-                >
-                  下一张
-                </button>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowAnswer((v) => !v)}
+              className="rounded-lg px-2 py-1 text-xs text-orange-600 active:bg-orange-50"
+            >
+              {showAnswer ? '收起答案' : '显示答案'}
+            </button>
           </div>
-          <ZoomableImage
-            src={answerUrls[answerIndex].url}
-            className="h-56 w-full rounded-lg"
-            alt="答案"
-          />
+
+          {showAnswer ? (
+            <div className="flex gap-2 overflow-x-auto">
+              {answerUrls.map((a, i) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => setZoomAnswer(i)}
+                  className="shrink-0 overflow-hidden rounded-lg border border-zinc-200 active:opacity-80"
+                >
+                  <img
+                    src={a.url}
+                    alt={`答案 ${i + 1}`}
+                    className="h-28 w-auto object-cover"
+                    loading="lazy"
+                  />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAnswer(true)}
+              className="mt-1 w-full rounded-xl border border-dashed border-zinc-300 py-6 text-xs text-zinc-400 active:bg-zinc-50"
+            >
+              答案已隐藏 · 点一下再显示
+            </button>
+          )}
         </div>
       )}
 
@@ -333,35 +369,61 @@ export default function ProblemPage() {
             { label: '今天再复习', days: 0 },
             { label: '3 天后', days: 3 },
             { label: '7 天后', days: 7 },
+            { label: '14 天后', days: 14 },
             { label: '30 天后', days: 30 },
           ].map((opt) => (
             <Button
               key={opt.days}
               block
-              onClick={async () => {
-                const base = new Date();
-                base.setHours(9, 0, 0, 0);
-                base.setDate(base.getDate() + opt.days);
-                await reschedule(problem.id, base.getTime());
-                await db.reviewLogs.add({
-                  id: newId(),
-                  problemId: problem.id,
-                  rating: 0,
-                  reviewedAt: Date.now(),
-                  durationMs: 0,
-                  prevDue: card?.due ?? 0,
-                  nextDue: base.getTime(),
-                  prevState: card?.state ?? 0,
-                  nextState: card?.state ?? 0,
-                });
-                setRescheduleOpen(false);
-                toast.show('已改期', 'success');
-              }}
+              onClick={() => void applyReschedule(opt.days)}
             >
               {opt.label}
             </Button>
           ))}
         </div>
+
+        <div className="mt-4 border-t border-zinc-100 pt-3">
+          <div className="mb-1.5 text-[11px] text-zinc-500">自定义天数</div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={365}
+              value={customDays}
+              onChange={(e) => setCustomDays(e.target.value.replace(/\D/g, '').slice(0, 3))}
+              placeholder="例如 5"
+              className="h-10 w-24 rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:border-orange-300"
+            />
+            <span className="text-xs text-zinc-500">天后复习</span>
+            <Button
+              variant="primary"
+              className="ml-auto"
+              disabled={!customDays || Number(customDays) < 1}
+              onClick={() => void applyReschedule(Number(customDays))}
+            >
+              确定
+            </Button>
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
+            手动改期只调整下次时间，不影响 FSRS 的记忆强度。
+          </p>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={zoomAnswer !== null}
+        onClose={() => setZoomAnswer(null)}
+        title="答案"
+        size="lg"
+      >
+        {zoomAnswer !== null && answerUrls[zoomAnswer] && (
+          <ZoomableImage
+            src={answerUrls[zoomAnswer].url}
+            className="h-[70vh] w-full rounded-lg"
+            alt="答案大图"
+          />
+        )}
       </Dialog>
 
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} title="删除这道错题？" size="sm">

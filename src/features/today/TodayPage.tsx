@@ -1,58 +1,26 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronRight, Flame, Plus } from 'lucide-react';
 import { db, getSetting } from '../../storage/db';
 import { buildQueue } from '../../domain/queue';
 import { dayKey, formatToday, learningDayStart } from '../../domain/time';
-import { calcStreak } from '../../domain/stats';
-import { useAssetUrl } from '../../hooks/useAssetUrl';
+import { calcStreak, problemsDueOn } from '../../domain/stats';
 import { Button } from '../../ui/Button';
+import { Dialog } from '../../ui/Dialog';
 import { EmptyState } from '../../ui/EmptyState';
 import { cn } from '../../ui/cn';
-
-function RecentItem({ id }: { id: string }) {
-  const problem = useLiveQuery(() => db.problems.get(id), [id]);
-  const url = useAssetUrl(problem?.thumbAssetId ?? problem?.stemAssetId);
-  const chapter = useLiveQuery(
-    () => (problem ? db.chapters.get(problem.chapterId) : undefined),
-    [problem?.chapterId]
-  );
-
-  if (!problem) return null;
-  return (
-    <Link
-      to={`/problem/${problem.id}`}
-      className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-2.5 active:bg-zinc-50"
-    >
-      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-100">
-        {url ? (
-          <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-        ) : (
-          <div className="flex h-full items-center justify-center text-[10px] text-zinc-400">
-            无图
-          </div>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-zinc-800">{chapter?.name ?? '未分类'}</div>
-        <div className="truncate text-xs text-zinc-500">
-          {problem.wrongNote || problem.sourcePaper || '没有填写错误原因'}
-        </div>
-      </div>
-      <ChevronRight size={16} className="shrink-0 text-zinc-300" />
-    </Link>
-  );
-}
 
 export default function TodayPage() {
   const navigate = useNavigate();
   const problems = useLiveQuery(() => db.problems.toArray(), [], []);
   const cards = useLiveQuery(() => db.cards.toArray(), [], []);
   const subjects = useLiveQuery(() => db.subjects.orderBy('order').toArray(), [], []);
+  const chapters = useLiveQuery(() => db.chapters.toArray(), [], []);
   const logs = useLiveQuery(() => db.reviewLogs.toArray(), [], []);
   const lastBackupAt = useLiveQuery(() => getSetting<number>('lastBackupAt', 0), [], 0);
 
+  const [openOffset, setOpenOffset] = useState<number | null>(null);
   const now = Date.now();
   const queue = useMemo(() => buildQueue(problems, cards, { now }), [problems, cards, now]);
   const streak = calcStreak(logs, now);
@@ -68,9 +36,17 @@ export default function TodayPage() {
   const todayReviewed = logs.filter((l) => dayKey(l.reviewedAt) === dayKey(now)).length;
   const weekReviewed = logs.filter((l) => l.reviewedAt >= now - 7 * 24 * 3600 * 1000).length;
   const activeCount = problems.filter((p) => !p.archivedAt).length;
-  const recent = useMemo(
-    () => [...problems].sort((a, b) => b.createdAt - a.createdAt).slice(0, 4),
-    [problems]
+
+  const chapterMap = useMemo(() => new Map(chapters.map((c) => [c.id, c])), [chapters]);
+  const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
+  const upcoming = useMemo(
+    () =>
+      [
+        { offset: 1, label: '明天' },
+        { offset: 3, label: '3 天后' },
+        { offset: 7, label: '7 天后' },
+      ].map((u) => ({ ...u, list: problemsDueOn(problems, cards, u.offset, now) })),
+    [problems, cards, now]
   );
 
   const backupDays = lastBackupAt
@@ -174,13 +150,31 @@ export default function TodayPage() {
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-zinc-700">最近录入</h2>
+          <h2 className="text-sm font-medium text-zinc-700">接下来</h2>
           <Link to="/library" className="text-xs text-zinc-400">
             全部错题
           </Link>
         </div>
-        {recent.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300">
+
+        <div className="grid grid-cols-3 gap-2.5">
+          {upcoming.map((u) => (
+            <button
+              key={u.offset}
+              type="button"
+              onClick={() => setOpenOffset(u.offset)}
+              disabled={u.list.length === 0}
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-3 text-left active:bg-zinc-50 disabled:opacity-60"
+            >
+              <div className="text-xl font-semibold tabular-nums text-zinc-900">
+                {u.list.length}
+              </div>
+              <div className="mt-0.5 text-[11px] text-zinc-500">{u.label}</div>
+            </button>
+          ))}
+        </div>
+
+        {problems.length === 0 && (
+          <div className="mt-3 rounded-2xl border border-dashed border-zinc-300">
             <EmptyState
               icon={<Plus size={28} />}
               title="还没有错题"
@@ -192,14 +186,48 @@ export default function TodayPage() {
               }
             />
           </div>
-        ) : (
-          <div className="space-y-2">
-            {recent.map((p) => (
-              <RecentItem key={p.id} id={p.id} />
-            ))}
-          </div>
         )}
       </section>
+
+      <Dialog
+        open={openOffset !== null}
+        onClose={() => setOpenOffset(null)}
+        title={openOffset !== null ? `${openOffset} 天后要复习的错题` : ''}
+        size="md"
+      >
+        {openOffset !== null && (
+          <div className="space-y-2">
+            {problemsDueOn(problems, cards, openOffset, now).map((p) => {
+              const chapter = chapterMap.get(p.chapterId);
+              return (
+                <Link
+                  key={p.id}
+                  to={`/problem/${p.id}`}
+                  onClick={() => setOpenOffset(null)}
+                  className="flex items-center gap-3 rounded-xl border border-zinc-200 p-2.5 active:bg-zinc-50"
+                >
+                  <span
+                    className="h-9 w-1 shrink-0 rounded-full"
+                    style={{ backgroundColor: subjectMap.get(p.subjectId)?.color }}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-zinc-800">
+                      {chapter?.name ?? '未分类'}
+                    </span>
+                    <span className="block truncate text-[11px] text-zinc-400">
+                      {p.wrongNote || p.sourcePaper || '没有备注'}
+                    </span>
+                  </span>
+                  <ChevronRight size={16} className="shrink-0 text-zinc-300" />
+                </Link>
+              );
+            })}
+            {problemsDueOn(problems, cards, openOffset, now).length === 0 && (
+              <p className="py-4 text-center text-xs text-zinc-400">这一天没有到期的错题</p>
+            )}
+          </div>
+        )}
+      </Dialog>
 
       <footer className={cn('pt-2 text-center text-[11px] leading-relaxed text-zinc-400')}>
         数据只保存在这台设备的浏览器里

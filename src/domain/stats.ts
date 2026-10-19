@@ -176,3 +176,93 @@ export function calcStreak(logs: Pick<ReviewLog, 'reviewedAt'>[], now: number): 
   }
   return streak;
 }
+
+export interface AccuracyBucket {
+  id: string;
+  name: string;
+  /** 参与统计的评分次数 */
+  total: number;
+  /** 评为「记得 / 熟练」的次数 */
+  remembered: number;
+  /** 0–1 */
+  rate: number;
+  color?: string;
+}
+
+function finishBucket(bucket: AccuracyBucket): AccuracyBucket {
+  bucket.rate = bucket.total ? bucket.remembered / bucket.total : 0;
+  return bucket;
+}
+
+function accumulate(
+  logs: Pick<ReviewLog, 'problemId' | 'rating' | 'reviewedAt'>[],
+  problems: Problem[],
+  since: number,
+  buckets: Map<string, AccuracyBucket>,
+  keyOf: (p: Problem) => string | undefined
+): AccuracyBucket[] {
+  const problemMap = new Map(problems.map((p) => [p.id, p]));
+
+  for (const log of logs) {
+    if (log.reviewedAt < since) continue;
+    if (log.rating < 1 || log.rating > 4) continue;
+    const problem = problemMap.get(log.problemId);
+    if (!problem) continue;
+    const key = keyOf(problem);
+    if (!key) continue;
+    const bucket = buckets.get(key);
+    if (!bucket) continue;
+    bucket.total++;
+    if (log.rating >= 3) bucket.remembered++;
+  }
+
+  return [...buckets.values()].filter((b) => b.total > 0).map(finishBucket);
+}
+
+/**
+ * 按科目统计「回忆正确率」：自评「记得 / 熟练」算答对。
+ * 只统计 since 之后的评分，并且题目必须仍然存在。
+ */
+export function accuracyBySubject(
+  logs: Pick<ReviewLog, 'problemId' | 'rating' | 'reviewedAt'>[],
+  problems: Problem[],
+  subjects: { id: string; name: string; color: string }[],
+  since: number
+): AccuracyBucket[] {
+  const buckets = new Map<string, AccuracyBucket>(
+    subjects.map((s) => [s.id, { id: s.id, name: s.name, total: 0, remembered: 0, rate: 0, color: s.color }])
+  );
+  return accumulate(logs, problems, since, buckets, (p) => p.subjectId).sort(
+    (a, b) => a.rate - b.rate || b.total - a.total
+  );
+}
+
+/** 按章节统计正确率，用于科目下钻 */
+export function accuracyByChapter(
+  logs: Pick<ReviewLog, 'problemId' | 'rating' | 'reviewedAt'>[],
+  problems: Problem[],
+  chapters: Chapter[],
+  since: number
+): AccuracyBucket[] {
+  const buckets = new Map<string, AccuracyBucket>(
+    chapters.map((c) => [c.id, { id: c.id, name: c.name, total: 0, remembered: 0, rate: 0 }])
+  );
+  return accumulate(logs, problems, since, buckets, (p) => p.chapterId);
+}
+
+/** 指定科目下、某学习日到期的题目（首页「N 天后」用） */
+export function problemsDueOn(
+  problems: Problem[],
+  cards: Card[],
+  offsetDays: number,
+  now: number
+): Problem[] {
+  const dayStart = learningDayStart(now) + offsetDays * DAY;
+  const dayEnd = dayStart + DAY;
+  const cardMap = new Map(cards.map((c) => [c.problemId, c]));
+  return problems.filter((p) => {
+    if (p.archivedAt) return false;
+    const card = cardMap.get(p.id);
+    return Boolean(card && card.due >= dayStart && card.due < dayEnd);
+  });
+}
