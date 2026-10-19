@@ -24,6 +24,64 @@ export const ERROR_TAG_COLORS: Record<string, string> = {
 };
 
 /**
+ * 掌握程度：同一色相由深到浅，越深 = 越不熟 = 越该重点看。
+ * 1 完全不会 → 深赭色；4 已掌握 → 浅橙；未分级用灰色。
+ */
+export const MASTERY_LEVELS = [
+  {
+    level: 1 as const,
+    label: '完全不会',
+    short: '不会',
+    color: '#9a3412',
+    soft: '#fde8d7',
+    hint: '重点看',
+  },
+  {
+    level: 2 as const,
+    label: '不熟',
+    short: '不熟',
+    color: '#ea580c',
+    soft: '#fee7d5',
+    hint: '多练',
+  },
+  {
+    level: 3 as const,
+    label: '一般',
+    short: '一般',
+    color: '#fb923c',
+    soft: '#fef0e4',
+    hint: '保持',
+  },
+  {
+    level: 4 as const,
+    label: '掌握',
+    short: '掌握',
+    color: '#fdba74',
+    soft: '#fff7ed',
+    hint: '可归档',
+  },
+];
+
+export const MASTERY_UNSET_COLOR = '#d4d4d8';
+
+export function masteryLevel(level?: number) {
+  return MASTERY_LEVELS.find((m) => m.level === level);
+}
+
+export function masteryColor(level?: number): string {
+  return masteryLevel(level)?.color ?? MASTERY_UNSET_COLOR;
+}
+
+export function masteryLabel(level?: number): string {
+  return masteryLevel(level)?.label ?? '未分级';
+}
+
+/** 选中态按钮上的文字色：最浅的那档用深色字才看得清 */
+export function masteryTextColor(level?: number): string {
+  return level === 4 ? '#7c2d12' : '#ffffff';
+}
+
+/**
  * 首次启动写入的分类模板。
  * 数学二不考概率论与无穷级数；839 按王建辉《自动控制原理》第 2 版
  * 与王福利《过程控制系统》第 2 版的章节拆分。

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Plus } from 'lucide-react';
-import type { Chapter, SourceKind, Subject, Topic } from '../../domain/types';
-import { ERROR_TAGS } from '../../domain/taxonomy';
+import type { Chapter, Mastery, SourceKind, Subject, Topic } from '../../domain/types';
+import { ERROR_TAGS, MASTERY_LEVELS, masteryTextColor } from '../../domain/taxonomy';
 import { createChapter, createTopic } from '../../storage/problems';
 import { cn } from '../../ui/cn';
 import { Button } from '../../ui/Button';
@@ -17,6 +17,8 @@ export interface MetaValue {
   sourceKind?: SourceKind;
   wrongNote: string;
   errorTags: string[];
+  /** 掌握程度：1 完全不会 … 4 已掌握 */
+  mastery?: Mastery;
 }
 
 interface MetadataFieldsProps {
@@ -91,6 +93,7 @@ export function MetadataFields({
     value.topicIds.length +
     (value.wrongNote ? 1 : 0) +
     (value.errorTags?.length ?? 0) +
+    (value.mastery ? 1 : 0) +
     (value.sourceYear || value.sourcePaper || value.sourceNo ? 1 : 0);
 
   const toggleErrorTag = (tag: string) => {
@@ -236,6 +239,37 @@ export function MetadataFields({
                 <Plus size={16} />
               </Button>
             </div>
+          </div>
+
+          <div>
+            <span className="mb-1.5 flex items-baseline justify-between text-xs font-medium text-zinc-500">
+              掌握程度
+              <span className="text-[10px] font-normal text-zinc-400">颜色越深越该重点看</span>
+            </span>
+            <div className="flex gap-2">
+              {MASTERY_LEVELS.map((m) => {
+                const active = value.mastery === m.level;
+                return (
+                  <button
+                    key={m.level}
+                    type="button"
+                    onClick={() => set({ mastery: active ? undefined : m.level })}
+                    className={cn(
+                      'h-9 flex-1 rounded-lg border text-xs transition-colors',
+                      active ? 'border-transparent font-medium' : 'border-zinc-200 text-zinc-500'
+                    )}
+                    style={
+                      active
+                        ? { backgroundColor: m.color, color: masteryTextColor(m.level) }
+                        : undefined
+                    }
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-[10px] text-zinc-400">再点一次可以取消分级</p>
           </div>
 
           <div>

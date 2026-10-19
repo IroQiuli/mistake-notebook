@@ -162,6 +162,26 @@ export default function LibraryPage() {
             {s.name.replace('839 自动控制原理及过程控制', '839 自控')}
           </button>
         ))}
+        <button
+          type="button"
+          data-testid="quick-key-only"
+          onClick={() =>
+            setFilter((f) => ({ ...f, mastery: f.mastery?.length ? [] : [1, 2] }))
+          }
+          className={cn(
+            'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs',
+            filter.mastery?.length
+              ? 'text-white'
+              : 'bg-white text-zinc-600 ring-1 ring-zinc-200'
+          )}
+          style={filter.mastery?.length ? { backgroundColor: '#9a3412' } : undefined}
+        >
+          <span
+            className="h-2 w-2 rounded-full"
+            style={{ backgroundColor: filter.mastery?.length ? '#fed7aa' : '#9a3412' }}
+          />
+          重点关注
+        </button>
       </div>
 
       {list.length === 0 ? (

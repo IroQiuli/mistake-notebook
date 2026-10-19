@@ -102,6 +102,8 @@ const seeded = await page.evaluate(async (stem) => {
           sourceYear: rnd() < 0.4 ? 2018 + Math.floor(rnd() * 6) : undefined,
           sourcePaper: rnd() < 0.3 ? '2023 真题' : undefined,
           errorTags: [tags[Math.floor(rnd() * tags.length)]],
+          // 大部分题有掌握程度，少量留给「未分级」
+          mastery: rnd() < 0.85 ? 1 + Math.floor(rnd() * 4) : undefined,
           createdAt: now - Math.floor(rnd() * 40) * DAY,
           updatedAt: now,
           archivedAt: archived ? now - DAY : undefined,
@@ -197,6 +199,24 @@ await page.screenshot({ path: path.join(OUT, 'doc-stats-open.png'), fullPage: tr
 await page.goto(BASE + '/#/settings');
 await page.waitForTimeout(800);
 await page.screenshot({ path: path.join(OUT, 'doc-goals.png'), fullPage: true });
+
+// 错题本：左侧色条 = 掌握程度深浅
+await page.goto(BASE + '/#/library');
+await page.waitForTimeout(1000);
+await page.screenshot({ path: path.join(OUT, 'doc-library.png'), fullPage: true });
+
+// 筛选手感：掌握程度分组
+await page.getByRole('button', { name: /筛选/ }).click();
+await page.waitForTimeout(600);
+await page.screenshot({ path: path.join(OUT, 'doc-filter-mastery.png') });
+await page.getByRole('button', { name: '应用' }).click();
+await page.waitForTimeout(400);
+
+// 题目详情：掌握程度选择条
+const firstRow = page.locator('a[href*="/problem/"]').first();
+await firstRow.click();
+await page.waitForTimeout(900);
+await page.screenshot({ path: path.join(OUT, 'doc-problem-mastery.png'), fullPage: true });
 
 await browser.close();
 console.log('shots written to', OUT);

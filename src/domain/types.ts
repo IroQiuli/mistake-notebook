@@ -45,6 +45,12 @@ export interface Topic {
 /** 题目来源类型；「真题」在筛选里单独成一支 */
 export type SourceKind = '真题' | '模拟题' | '讲义' | '其他';
 
+/**
+ * 掌握程度（手动分级）：1 = 完全不会（要重点关注）… 4 = 已掌握。
+ * 只用于「我现在对这道题心里有没有底」，不参与 FSRS 排期。
+ */
+export type Mastery = 1 | 2 | 3 | 4;
+
 export interface Problem {
   id: ID;
   subjectId: ID;
@@ -67,6 +73,8 @@ export interface Problem {
   sourceKind?: SourceKind;
   /** 错因标签，见 ERROR_TAGS */
   errorTags?: string[];
+  /** 掌握程度：1 完全不会 … 4 已掌握；未设表示还没分级 */
+  mastery?: Mastery;
 
   createdAt: number;
   updatedAt: number;

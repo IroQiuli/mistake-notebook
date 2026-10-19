@@ -1,4 +1,4 @@
-import type { Chapter, Problem, ProblemStatus, Topic } from './types';
+import type { Chapter, Mastery, Problem, ProblemStatus, Topic } from './types';
 
 export interface ProblemFilter {
   keyword?: string;
@@ -10,6 +10,13 @@ export interface ProblemFilter {
   years?: number[];
   /** 只看真题 */
   realOnly?: boolean;
+  /** 掌握程度；'none' 表示还没分级 */
+  mastery?: (Mastery | 'none')[];
+}
+
+/** 掌握程度 1~2 的题算「重点」：最不熟，最该先看 */
+export function isKeyProblem(p: Problem): boolean {
+  return p.mastery === 1 || p.mastery === 2;
 }
 
 /**
@@ -44,6 +51,13 @@ export function filterProblems(
     if (f.difficulty?.length && !f.difficulty.includes(p.difficulty)) return false;
     if (f.years?.length && (!p.sourceYear || !f.years.includes(p.sourceYear))) return false;
     if (f.realOnly && !isRealExam(p)) return false;
+    if (f.mastery?.length) {
+      if (p.mastery === undefined) {
+        if (!f.mastery.includes('none')) return false;
+      } else if (!f.mastery.includes(p.mastery)) {
+        return false;
+      }
+    }
 
     const status = f.status ?? 'all';
     if (status === 'archived' && !p.archivedAt) return false;
@@ -78,5 +92,6 @@ export function countActiveFilters(f: ProblemFilter): number {
   if (f.status && f.status !== 'all') n++;
   if (f.years?.length) n++;
   if (f.realOnly) n++;
+  if (f.mastery?.length) n++;
   return n;
 }

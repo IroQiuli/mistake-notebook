@@ -14,6 +14,7 @@ import { putAsset, getUrl } from '../../storage/assets';
 import { applyRating } from '../../domain/scheduler';
 import { formatDateTime, formatDue } from '../../domain/time';
 import { RATING_LABEL } from '../../domain/types';
+import { MASTERY_LEVELS, masteryLevel, masteryTextColor } from '../../domain/taxonomy';
 import { useAssetUrl } from '../../hooks/useAssetUrl';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
@@ -21,6 +22,7 @@ import { EmptyState } from '../../ui/EmptyState';
 import { PageLoading } from '../../ui/Spinner';
 import { useToast } from '../../ui/Toast';
 import { ZoomableImage } from '../../ui/ZoomableImage';
+import { cn } from '../../ui/cn';
 import { ProblemForm } from '../capture/ProblemForm';
 import type { MetaValue } from '../capture/MetadataFields';
 import { canvasToBlob, prepareImage } from '../capture/pipeline';
@@ -136,6 +138,7 @@ export default function ProblemPage() {
     sourceKind: problem.sourceKind,
     wrongNote: problem.wrongNote,
     errorTags: problem.errorTags ?? [],
+    mastery: problem.mastery,
   };
 
   return (
@@ -223,6 +226,41 @@ export default function ProblemPage() {
           改期
         </Button>
       </div>
+
+      <section className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+        <div className="mb-2 flex items-baseline justify-between">
+          <span className="text-xs font-medium text-zinc-500">掌握程度</span>
+          <span className="text-[10px] text-zinc-400">
+            {masteryLevel(problem.mastery)?.hint ?? '颜色越深越该重点看'}
+          </span>
+        </div>
+        <div className="flex gap-2">
+          {MASTERY_LEVELS.map((m) => {
+            const active = problem.mastery === m.level;
+            return (
+              <button
+                key={m.level}
+                type="button"
+                data-testid={`mastery-${m.level}`}
+                onClick={() =>
+                  void updateProblem(problem.id, { mastery: active ? undefined : m.level })
+                }
+                className={cn(
+                  'h-8 flex-1 rounded-lg border text-[11px] transition-colors',
+                  active ? 'border-transparent font-medium' : 'border-zinc-200 text-zinc-500'
+                )}
+                style={
+                  active
+                    ? { backgroundColor: m.color, color: masteryTextColor(m.level) }
+                    : undefined
+                }
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       {answerUrls.length > 0 && (
         <div className="rounded-2xl border border-zinc-200 bg-white p-3">

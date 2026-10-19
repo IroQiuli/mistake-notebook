@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import type { Chapter, ProblemStatus, Subject, Topic } from '../../domain/types';
+import type { Chapter, Mastery, ProblemStatus, Subject, Topic } from '../../domain/types';
 import type { ProblemFilter } from '../../domain/filter';
+import { MASTERY_LEVELS } from '../../domain/taxonomy';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import { cn } from '../../ui/cn';
@@ -81,7 +82,7 @@ export function FilterBar({
     setOpenSubjects(new Set(subjectId ? [subjectId] : []));
   }, [open, value, subjectId]);
 
-  const toggle = <K extends 'chapterIds' | 'topicIds' | 'difficulty' | 'years'>(
+  const toggle = <K extends 'chapterIds' | 'topicIds' | 'difficulty' | 'years' | 'mastery'>(
     key: K,
     item: NonNullable<ProblemFilter[K]>[number]
   ) => {
@@ -148,6 +149,34 @@ export function FilterBar({
                 {s.label}
               </Chip>
             ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-xs font-medium text-zinc-500">掌握程度</span>
+            <span className="text-[10px] text-zinc-400">颜色越深越该重点看</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {MASTERY_LEVELS.map((m) => (
+              <Chip
+                key={m.level}
+                active={draft.mastery?.includes(m.level) ?? false}
+                onClick={() => toggle('mastery', m.level)}
+              >
+                <span
+                  className="mr-1 inline-block h-2 w-2 rounded-full align-[-1px]"
+                  style={{ backgroundColor: m.color }}
+                />
+                {m.label}
+              </Chip>
+            ))}
+            <Chip
+              active={draft.mastery?.includes('none') ?? false}
+              onClick={() => toggle('mastery', 'none' as Mastery | 'none')}
+            >
+              未分级
+            </Chip>
           </div>
         </div>
 
