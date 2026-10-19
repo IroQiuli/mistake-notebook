@@ -1,0 +1,80 @@
+import { db } from './db';
+import type { Asset, AssetKind } from '../domain/types';
+
+const urlCache = new Map<string, string>();
+
+export async function putAsset(
+  blob: Blob,
+  kind: AssetKind,
+  size: { width: number; height: number },
+  sourceAssetId?: string
+): Promise<string> {
+  const id = crypto.randomUUID();
+  await db.assets.add({
+    id,
+    kind,
+    sourceAssetId,
+    blob,
+    width: size.width,
+    height: size.height,
+    mime: blob.type || 'image/jpeg',
+    bytes: blob.size,
+    createdAt: Date.now(),
+  });
+  return id;
+}
+
+export async function getAsset(id: string): Promise<Asset | undefined> {
+  return db.assets.get(id);
+}
+
+export async function getUrl(id: string): Promise<string | null> {
+  const hit = urlCache.get(id);
+  if (hit) return hit;
+  const a = await db.assets.get(id);
+  if (!a) return null;
+  const url = URL.createObjectURL(a.blob);
+  urlCache.set(id, url);
+  return url;
+}
+
+export function releaseUrl(id: string): void {
+  const url = urlCache.get(id);
+  if (url) {
+    URL.revokeObjectURL(url);
+    urlCache.delete(id);
+  }
+}
+
+export async function deleteAssets(ids: string[]): Promise<void> {
+  ids.forEach(releaseUrl);
+  await db.assets.bulkDelete(ids);
+}
+
+/** 删除没有任何错题引用的图片，返回释放的字节数 */
+export async function collectOrphans(): Promise<number> {
+  const problems = await db.problems.toArray();
+  const used = new Set<string>();
+  for (const p of problems) {
+    used.add(p.stemAssetId);
+    p.answerAssetIds.forEach((a) => used.add(a));
+  }
+  const all = await db.assets.toArray();
+  const orphans = all.filter((a) => !used.has(a.id));
+  const bytes = orphans.reduce((sum, a) => sum + a.bytes, 0);
+  await deleteAssets(orphans.map((a) => a.id));
+  return bytes;
+}
+
+export async function storageUsage(): Promise<{ usage: number; quota: number }> {
+  if (!navigator.storage?.estimate) return { usage: 0, quota: 0 };
+  const e = await navigator.storage.estimate();
+  return { usage: e.usage ?? 0, quota: e.quota ?? 0 };
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
