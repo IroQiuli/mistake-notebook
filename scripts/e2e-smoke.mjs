@@ -37,6 +37,34 @@ async function shot(name, fullPage = true) {
   shots.push(file);
 }
 
+async function readInks() {
+  return page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const req = indexedDB.open('cuotiben');
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('inks', 'readonly');
+          const all = tx.objectStore('inks').getAll();
+          all.onsuccess = () =>
+            resolve(all.result.map((i) => ({ type: i.ownerType, n: i.strokes.length })));
+        };
+        req.onerror = () => resolve([]);
+      })
+  );
+}
+
+async function drawStroke() {
+  const canvas = page.locator('canvas.ink-canvas').first();
+  const b = await canvas.boundingBox();
+  if (!b) throw new Error('找不到笔迹画布');
+  await page.mouse.move(b.x + b.width * 0.2, b.y + b.height * 0.25);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width * 0.45, b.y + b.height * 0.35, { steps: 8 });
+  await page.mouse.move(b.x + b.width * 0.7, b.y + b.height * 0.3, { steps: 8 });
+  await page.mouse.up();
+}
+
 // 1. 今日（空状态）
 await page.goto(BASE + '/#/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(700);
@@ -82,23 +110,56 @@ await page.goto(BASE + '/#/library');
 await page.waitForTimeout(700);
 await shot('08-library.png');
 
-// 5. 复习
+// 5. 复习：手写作答 + 评分
 await page.goto(BASE + '/#/review');
 await page.waitForTimeout(1000);
 await shot('09-review.png', false);
+await drawStroke();
+await page.waitForTimeout(900);
+await shot('09b-review-written.png', false);
 await page.getByRole('button', { name: '看答案' }).click();
 await page.waitForTimeout(500);
 await shot('10-review-revealed.png', false);
 await page.getByRole('button', { name: /记得/ }).click();
 await page.waitForSelector('text=这一轮复习完了', { timeout: 15000 });
+await page.waitForTimeout(900);
 await shot('11-review-done.png');
+console.log('inks after review:', JSON.stringify(await readInks()));
 
-// 6. 我的
+// 6. 详情页批注
+await page.goto(BASE + '/#/library');
+await page.waitForTimeout(700);
+await page.locator('a[href*="/problem/"]').first().click();
+await page.waitForTimeout(900);
+await page.getByRole('button', { name: '批注' }).click();
+await page.waitForTimeout(700);
+await drawStroke();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: '完成' }).click();
+await page.waitForTimeout(900);
+await shot('14-problem-annotated.png');
+console.log('inks after annotation:', JSON.stringify(await readInks()));
+
+// 7. 草稿板
+await page.setViewportSize({ width: 390, height: 844 });
+await page.goto(BASE + '/#/scratch');
+await page.waitForTimeout(700);
+await page.getByRole('button', { name: '新建', exact: true }).click();
+await page.waitForTimeout(700);
+await drawStroke();
+await page.waitForTimeout(900);
+await shot('15-scratch.png', false);
+await page.getByRole('button', { name: '返回草稿列表' }).click();
+await page.waitForTimeout(700);
+await shot('16-scratch-list.png');
+console.log('inks after scratch:', JSON.stringify(await readInks()));
+
+// 8. 我的
 await page.goto(BASE + '/#/settings');
 await page.waitForTimeout(700);
 await shot('12-settings.png');
 
-// 7. 桌面宽度
+// 9. 桌面宽度
 await page.setViewportSize({ width: 1280, height: 900 });
 await page.goto(BASE + '/#/library');
 await page.waitForTimeout(700);

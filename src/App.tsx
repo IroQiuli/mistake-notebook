@@ -1,5 +1,5 @@
 import { HashRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import { CalendarDays, Layers, Plus, Settings } from 'lucide-react';
+import { CalendarDays, Layers, PenLine, Plus, Settings } from 'lucide-react';
 import { useEffect } from 'react';
 import { ToastProvider } from './ui/Toast';
 import { cn } from './ui/cn';
@@ -9,11 +9,13 @@ import LibraryPage from './features/library/LibraryPage';
 import ProblemPage from './features/problem/ProblemPage';
 import CapturePage from './features/capture/CapturePage';
 import ReviewPage from './features/review/ReviewPage';
+import ScratchPage from './features/scratch/ScratchPage';
 import SettingsPage from './features/settings/SettingsPage';
 
 const NAV = [
   { to: '/', label: '今日', icon: CalendarDays },
   { to: '/library', label: '错题本', icon: Layers },
+  { to: '/scratch', label: '草稿', icon: PenLine },
   { to: '/capture', label: '录入', icon: Plus },
   { to: '/settings', label: '我的', icon: Settings },
 ];
@@ -77,7 +79,10 @@ function Shell() {
 
       {!isImmersive && (
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 backdrop-blur safe-bottom md:hidden">
-          <div className="mx-auto grid max-w-md grid-cols-4">
+          <div
+            className="mx-auto grid max-w-md"
+            style={{ gridTemplateColumns: `repeat(${NAV.length}, minmax(0, 1fr))` }}
+          >
             {NAV.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
@@ -120,6 +125,7 @@ export default function App() {
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/problem/:id" element={<ProblemPage />} />
             <Route path="/capture" element={<CapturePage />} />
+            <Route path="/scratch" element={<ScratchPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route path="/review" element={<ReviewPage />} />

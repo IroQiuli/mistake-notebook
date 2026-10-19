@@ -1,17 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, Eye } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { db } from '../../storage/db';
+import { getUrl } from '../../storage/assets';
+import { latestInk } from '../../storage/inks';
 import { previewIntervals } from '../../domain/scheduler';
 import { formatDue, formatDuration, formatDateTime } from '../../domain/time';
 import { RATING_LABEL, type Rating } from '../../domain/types';
 import { useAssetUrl } from '../../hooks/useAssetUrl';
-import { getUrl } from '../../storage/assets';
+import { InkSurface, type InkSurfaceHandle } from '../../ink/InkSurface';
+import { InkToolbar } from '../../ink/InkToolbar';
+import { useInk } from '../../ink/useInk';
+import { useInkTools } from '../../ink/useInkTools';
 import { Button } from '../../ui/Button';
 import { EmptyState } from '../../ui/EmptyState';
 import { PageLoading } from '../../ui/Spinner';
-import { ZoomableImage } from '../../ui/ZoomableImage';
 import { cn } from '../../ui/cn';
 import { useSession } from './useSession';
 
@@ -22,12 +26,65 @@ const RATING_STYLE: Record<Rating, string> = {
   4: 'border-sky-200 bg-sky-50 text-sky-700',
 };
 
+/** 一次复习中的作答层：每次进入都新建，不显示上一次的解题笔迹 */
+function WriteArea({
+  problemId,
+  stemUrl,
+  showOldInk,
+}: {
+  problemId: string;
+  stemUrl: string;
+  showOldInk: boolean;
+}) {
+  const ink = useInk('attempt', problemId, 0, { fresh: true });
+  const tools = useInkTools();
+  const surface = useRef<InkSurfaceHandle>(null);
+  const oldInk = useLiveQuery(() => latestInk('problem-stem', problemId), [problemId]);
+
+  return (
+    <div className="mx-auto w-full max-w-3xl">
+      <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+        <InkSurface
+          ref={surface}
+          src={stemUrl}
+          strokes={ink.strokes}
+          onChange={ink.update}
+          tool={tools.tool}
+          color={tools.color}
+          width={tools.width}
+          backgroundStrokes={showOldInk ? (oldInk?.strokes ?? []) : []}
+          alt="题干，可直接书写"
+        />
+      </div>
+      <div className="mt-2">
+        <InkToolbar
+          tool={tools.tool}
+          color={tools.color}
+          width={tools.width}
+          onToolChange={tools.setTool}
+          onColorChange={tools.setColor}
+          onWidthChange={tools.setWidth}
+          onUndo={() => surface.current?.undo()}
+          onRedo={() => surface.current?.redo()}
+          onClear={() => {
+            if (window.confirm('清空这次作答的笔迹？')) surface.current?.clear();
+          }}
+        />
+      </div>
+      <p className="mt-1.5 text-center text-[11px] text-zinc-400">
+        直接在题上写，评完分自动保存这次的解题过程
+      </p>
+    </div>
+  );
+}
+
 export default function ReviewPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const subjectId = params.get('subject') ?? undefined;
   const { queue, index, current, revealed, finished, summary, reveal, rate } = useSession(subjectId);
 
+  const [showOldInk, setShowOldInk] = useState(false);
   const problemId = current?.problem.id;
 
   const chapter = useLiveQuery(
@@ -70,6 +127,10 @@ export default function ReviewPage() {
     () => (current ? previewIntervals(current.card, Date.now()) : null),
     [current]
   );
+
+  useEffect(() => {
+    setShowOldInk(false);
+  }, [problemId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -169,15 +230,26 @@ export default function ReviewPage() {
             {chapter?.name ?? '未分类'}
           </div>
         </div>
-        <div className="h-10 w-10" />
+        <button
+          type="button"
+          onClick={() => setShowOldInk((v) => !v)}
+          className={cn(
+            'flex h-10 w-10 items-center justify-center rounded-lg active:bg-zinc-100',
+            showOldInk ? 'text-orange-500' : 'text-zinc-500'
+          )}
+          aria-label="显示我的旧批注"
+        >
+          {showOldInk ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-100">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-100 p-2">
         {stemUrl ? (
-          <ZoomableImage
-            src={stemUrl}
-            className="h-full min-h-[45vh] w-full"
-            alt={`题目 ${index + 1}`}
+          <WriteArea
+            key={index}
+            problemId={current.problem.id}
+            stemUrl={stemUrl}
+            showOldInk={showOldInk}
           />
         ) : (
           <div className="flex h-full items-center justify-center p-8 text-center text-sm text-zinc-400">
@@ -187,7 +259,7 @@ export default function ReviewPage() {
       </div>
 
       {revealed && (
-        <div className="max-h-[45vh] overflow-y-auto border-t border-zinc-100 bg-white px-4 py-3">
+        <div className="max-h-[38vh] overflow-y-auto border-t border-zinc-100 bg-white px-4 py-3">
           {answerUrls.length > 0 ? (
             <div className="flex gap-2 overflow-x-auto">
               {answerUrls.map((url, i) => (
@@ -195,7 +267,7 @@ export default function ReviewPage() {
                   key={i}
                   src={url}
                   alt={`答案 ${i + 1}`}
-                  className="h-52 w-auto rounded-lg border border-zinc-200 object-contain"
+                  className="h-44 w-auto rounded-lg border border-zinc-200 object-contain"
                 />
               ))}
             </div>

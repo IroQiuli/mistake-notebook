@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, CalendarClock, ImagePlus, Trash2 } from 'lucide-react';
+import { ArrowLeft, CalendarClock, ImagePlus, PenLine, Trash2 } from 'lucide-react';
 import { db } from '../../storage/db';
 import {
   deleteProblem,
@@ -23,6 +23,9 @@ import { ZoomableImage } from '../../ui/ZoomableImage';
 import { ProblemForm } from '../capture/ProblemForm';
 import type { MetaValue } from '../capture/MetadataFields';
 import { canvasToBlob, prepareImage } from '../capture/pipeline';
+import { AnnotationOverlay } from './AnnotationOverlay';
+import { InkSurface } from '../../ink/InkSurface';
+import { useInk } from '../../ink/useInk';
 
 export default function ProblemPage() {
   const { id = '' } = useParams();
@@ -65,6 +68,9 @@ export default function ProblemPage() {
   );
 
   const [editOpen, setEditOpen] = useState(false);
+  const [annotating, setAnnotating] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const annotation = useInk('problem-stem', problem?.id ?? '', 0);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [answerIndex, setAnswerIndex] = useState(0);
@@ -120,6 +126,10 @@ export default function ProblemPage() {
           <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
             编辑
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setAnnotating(true)} disabled={!stemUrl}>
+            <PenLine size={14} />
+            批注
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -132,28 +142,47 @@ export default function ProblemPage() {
 
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
         {stemUrl ? (
-          <ZoomableImage src={stemUrl} className="h-[46vh] max-h-[520px] w-full" alt="题干" />
+          <div className="max-h-[58vh] overflow-y-auto bg-zinc-100">
+            <InkSurface
+              src={stemUrl}
+              strokes={annotation.strokes}
+              onChange={() => {}}
+              tool="pen"
+              color="#18181b"
+              width={0.005}
+              readOnly
+              alt="题干"
+            />
+          </div>
         ) : (
           <div className="flex h-40 items-center justify-center text-sm text-zinc-400">
             图片缺失（导入时未包含）
           </div>
         )}
         <div className="flex items-center justify-between border-t border-zinc-100 px-4 py-2.5">
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
-            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: subject?.color }} />
-            {subject?.name.replace('839 自动控制原理及过程控制', '839 自控')} ·{' '}
-            {chapter?.name ?? '未分类'}
+          <div className="flex min-w-0 items-center gap-2 text-xs text-zinc-500">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: subject?.color }} />
+            <span className="truncate">
+              {subject?.name.replace('839 自动控制原理及过程控制', '839 自控')} ·{' '}
+              {chapter?.name ?? '未分类'}
+            </span>
           </div>
-          <span className="text-[11px] text-zinc-400">双指缩放 · 双击放大</span>
+          <button
+            type="button"
+            onClick={() => setZoomOpen(true)}
+            className="shrink-0 rounded px-1.5 py-1 text-[11px] text-zinc-400 active:bg-zinc-100"
+          >
+            放大看
+          </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3">
-        <div>
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3">
+        <div className="min-w-0">
           <div className="text-xs text-zinc-500">
             {problem.archivedAt ? '已掌握，不再排期' : `下次复习：${card ? formatDue(card.due, now) : '—'}`}
           </div>
-          <div className="mt-0.5 text-[11px] text-zinc-400">
+          <div className="mt-0.5 truncate text-[11px] text-zinc-400">
             {card
               ? `已复习 ${card.reps} 次 · 忘记 ${card.lapses} 次`
               : '尚无复习记录'}
@@ -162,7 +191,7 @@ export default function ProblemPage() {
               : ''}
           </div>
         </div>
-        <Button size="sm" variant="secondary" onClick={() => setRescheduleOpen(true)}>
+        <Button size="sm" variant="secondary" className="shrink-0" onClick={() => setRescheduleOpen(true)}>
           <CalendarClock size={14} />
           改期
         </Button>
@@ -352,6 +381,23 @@ export default function ProblemPage() {
           </Button>
         </div>
       </Dialog>
+
+      <Dialog open={zoomOpen} onClose={() => setZoomOpen(false)} title="题干" size="lg">
+        {stemUrl && (
+          <ZoomableImage src={stemUrl} className="h-[68vh] w-full rounded-lg" alt="题干大图" />
+        )}
+      </Dialog>
+
+      {annotating && stemUrl && (
+        <AnnotationOverlay
+          problemId={problem.id}
+          src={stemUrl}
+          onClose={() => {
+            setAnnotating(false);
+            void annotation.reload();
+          }}
+        />
+      )}
     </div>
   );
 }
