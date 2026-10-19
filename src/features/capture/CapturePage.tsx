@@ -9,6 +9,8 @@ import { setSetting } from '../../storage/db';
 import { Cropper } from './Cropper';
 import { ProblemForm } from './ProblemForm';
 import { defaultMeta } from './defaultMeta';
+import { PdfPicker } from './PdfPicker';
+import { loadPdf, type PdfDoc } from './pdf';
 import type { MetaValue } from './MetadataFields';
 import {
   DEFAULT_ENHANCE,
@@ -36,6 +38,7 @@ export default function CapturePage() {
   const toast = useToast();
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
 
   const [stage, setStage] = useState<Stage>('pick');
   const [busy, setBusy] = useState(false);
@@ -47,9 +50,11 @@ export default function CapturePage() {
   );
   const [meta, setMeta] = useState<MetaValue | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [pdf, setPdf] = useState<{ doc: PdfDoc; destroy: () => Promise<void>; name: string } | null>(
+    null
+  );
 
-  const onFile = async (file?: File) => {
-    if (!file) return;
+  const loadBlob = async (file: Blob) => {
     setBusy(true);
     try {
       const { canvas, width, height } = await prepareImage(file, 2400);
@@ -61,6 +66,24 @@ export default function CapturePage() {
     } catch (err) {
       console.error(err);
       toast.show('这张图打不开，换一张或重拍', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onFile = async (file?: File) => {
+    if (file) await loadBlob(file);
+  };
+
+  const onPdfFile = async (file?: File) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const doc = await loadPdf(file);
+      setPdf({ ...doc, name: file.name });
+    } catch (err) {
+      console.error(err);
+      toast.show('这个 PDF 打不开，可能已加密或损坏', 'error');
     } finally {
       setBusy(false);
     }
@@ -225,15 +248,29 @@ export default function CapturePage() {
             </span>
           </button>
 
-          <div className="flex w-full items-center gap-4 rounded-2xl border border-dashed border-zinc-200 bg-white/60 p-5 opacity-70">
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100 text-zinc-400">
+          <div className="flex w-full items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-5 text-left">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600">
               <FileText size={24} />
             </span>
-            <span>
-              <span className="block text-sm font-medium text-zinc-500">从 PDF / Word 截题</span>
-              <span className="block text-xs text-zinc-400">已在计划中，M3 上线</span>
-            </span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-zinc-900">从 PDF 截题</div>
+              <div className="text-xs text-zinc-500">真题 PDF、讲义，翻到那一页再框选</div>
+            </div>
+            <Button size="sm" disabled={busy} onClick={() => pdfRef.current?.click()}>
+              选 PDF
+            </Button>
           </div>
+          <input
+            ref={pdfRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              void onPdfFile(file);
+            }}
+          />
 
           <p className="px-1 text-[11px] leading-relaxed text-zinc-400">
             提示：拍的时候尽量正对卷子、光线均匀，后续框选会更准。
@@ -359,6 +396,21 @@ export default function CapturePage() {
             回到今日
           </Button>
         </div>
+      )}
+      {pdf && (
+        <PdfPicker
+          doc={pdf.doc}
+          fileName={pdf.name}
+          onCancel={() => {
+            void pdf.destroy();
+            setPdf(null);
+          }}
+          onPick={(blob) => {
+            void pdf.destroy();
+            setPdf(null);
+            void loadBlob(blob);
+          }}
+        />
       )}
     </div>
   );
