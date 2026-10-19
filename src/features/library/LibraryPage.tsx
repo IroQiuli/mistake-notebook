@@ -185,6 +185,7 @@ export default function LibraryPage() {
         onClose={() => setFilterOpen(false)}
         value={filter}
         onApply={setFilter}
+        subjects={subjects}
         chapters={chapters}
         topics={topics}
         subjectId={subjectId}

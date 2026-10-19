@@ -9,6 +9,7 @@ import {
 import type { InkPoint, Stroke, Tool } from '../domain/types';
 import { clearCanvas, drawSegment, drawStroke } from './renderer';
 import { hitTest, simplify } from './strokes';
+import { newId } from '../lib/id';
 
 export type InkTool = Tool | 'eraser';
 
@@ -152,7 +153,7 @@ export const InkSurface = forwardRef<InkSurfaceHandle, InkSurfaceProps>(function
 
     onFirstStroke?.();
     currentRef.current = {
-      id: crypto.randomUUID(),
+      id: newId(),
       tool,
       color,
       width,

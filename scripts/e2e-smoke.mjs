@@ -78,9 +78,9 @@ await shot('02-capture-pick.png');
 
 const fileInputs = page.locator('input[type=file]');
 await fileInputs.nth(1).setInputFiles('scripts/fixture-question.png');
-await page.waitForSelector('text=在图片上拖出这道题的区域', { timeout: 15000 });
+await page.waitForSelector('text=在题目上拖出选区，整页都在框里也可以', { timeout: 15000 });
 
-const box = await page.locator('div[style*="aspect-ratio"]').first().boundingBox();
+const box = await page.getByTestId('cropper').boundingBox();
 if (!box) throw new Error('找不到裁剪容器');
 await page.mouse.move(box.x + box.width * 0.05, box.y + box.height * 0.03);
 await page.mouse.down();
@@ -88,12 +88,9 @@ await page.mouse.move(box.x + box.width * 0.95, box.y + box.height * 0.52, { ste
 await page.mouse.up();
 await shot('03-crop.png');
 await page.getByRole('button', { name: '用这个区域' }).click();
-await page.waitForTimeout(800);
-await shot('04-enhance.png');
-await page.getByRole('button', { name: '下一步' }).click();
-await page.waitForTimeout(800);
+await page.waitForSelector('text=选一下科目和章节，就可以保存了', { timeout: 20000 });
 await shot('05-form.png');
-
+await page.getByRole('button', { name: /更多信息/ }).click();
 await page.getByPlaceholder(/当时为什么错/).fill('把阻尼比和自然频率搞混了，劳斯表第三行算错');
 await page.getByRole('button', { name: /保存并加入复习/ }).click();
 await page.waitForSelector('text=已保存，明天起会自动排期复习', { timeout: 15000 });
@@ -140,30 +137,25 @@ await page.waitForTimeout(900);
 await shot('14-problem-annotated.png');
 console.log('inks after annotation:', JSON.stringify(await readInks()));
 
-// 7. 草稿板
-await page.setViewportSize({ width: 390, height: 844 });
-await page.goto(BASE + '/#/scratch');
-await page.waitForTimeout(700);
-await page.getByRole('button', { name: '新建', exact: true }).click();
-await page.waitForTimeout(700);
-await drawStroke();
-await page.waitForTimeout(900);
-await shot('15-scratch.png', false);
-await page.getByRole('button', { name: '返回草稿列表' }).click();
-await page.waitForTimeout(700);
-await shot('16-scratch-list.png');
-console.log('inks after scratch:', JSON.stringify(await readInks()));
-
-// 8. 我的
+// 7. 我的
 await page.goto(BASE + '/#/settings');
 await page.waitForTimeout(700);
 await shot('12-settings.png');
 
-// 9. 桌面宽度
+// 8. 桌面宽度
 await page.setViewportSize({ width: 1280, height: 900 });
 await page.goto(BASE + '/#/library');
 await page.waitForTimeout(700);
 await shot('13-library-desktop.png');
+
+// 9. 筛选面板（科目树）
+await page.getByRole('button', { name: /筛选/ }).click();
+await page.waitForTimeout(500);
+const filterDialog = page.getByRole('dialog');
+await filterDialog.getByRole('button', { name: /839/ }).click();
+await page.waitForTimeout(400);
+await shot('17-filter-tree.png');
+await page.keyboard.press('Escape');
 
 console.log('shots:', shots.length);
 console.log('errors:', JSON.stringify(errors, null, 2));

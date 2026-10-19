@@ -1,4 +1,5 @@
 import { db } from './db';
+import { newId } from '../lib/id';
 import { newCard } from '../domain/scheduler';
 import type { Chapter, Problem, Topic } from '../domain/types';
 
@@ -8,7 +9,7 @@ export type ProblemInput = Omit<
 >;
 
 export async function createProblem(input: ProblemInput, now = Date.now()): Promise<string> {
-  const id = crypto.randomUUID();
+  const id = newId();
   const problem: Problem = { ...input, id, createdAt: now, updatedAt: now };
   await db.transaction('rw', db.problems, db.cards, db.topics, async () => {
     await db.problems.add(problem);
@@ -63,7 +64,7 @@ export async function reschedule(id: string, due: number): Promise<void> {
 export async function createChapter(subjectId: string, name: string): Promise<Chapter> {
   const max = await db.chapters.where('subjectId').equals(subjectId).toArray();
   const chapter: Chapter = {
-    id: crypto.randomUUID(),
+    id: newId(),
     subjectId,
     name: name.trim(),
     order: max.reduce((m, c) => Math.max(m, c.order), -1) + 1,
@@ -81,7 +82,7 @@ export async function createTopic(subjectId: string, name: string): Promise<Topi
     .first();
   if (existed) return existed;
   const topic: Topic = {
-    id: crypto.randomUUID(),
+    id: newId(),
     subjectId,
     name: trimmed,
     usageCount: 0,

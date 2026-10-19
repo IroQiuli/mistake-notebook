@@ -1,4 +1,5 @@
 import { db } from './db';
+import { newId } from '../lib/id';
 import type { Asset, AssetKind } from '../domain/types';
 
 const urlCache = new Map<string, string>();
@@ -23,7 +24,7 @@ export async function putAsset(
   size: { width: number; height: number },
   sourceAssetId?: string
 ): Promise<string> {
-  const id = crypto.randomUUID();
+  const id = newId();
   const data = await blobToBuffer(blob);
   await db.assets.add({
     id,

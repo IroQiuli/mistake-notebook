@@ -42,9 +42,9 @@ await page.waitForTimeout(2500);
 await page.screenshot({ path: path.join(SHOTS, '21-pdf-page5.png') });
 
 await page.getByRole('button', { name: /截取第 5 页/ }).click();
-await page.waitForSelector('text=在图片上拖出这道题的区域', { timeout: 30000 });
+await page.waitForSelector('text=在题目上拖出选区，整页都在框里也可以', { timeout: 30000 });
 
-const box = await page.locator('div[style*="aspect-ratio"]').first().boundingBox();
+const box = await page.getByTestId('cropper').boundingBox();
 if (!box) throw new Error('找不到裁剪容器');
 await page.mouse.move(box.x + box.width * 0.05, box.y + box.height * 0.05);
 await page.mouse.down();
@@ -53,9 +53,8 @@ await page.mouse.up();
 await page.screenshot({ path: path.join(SHOTS, '22-pdf-crop.png') });
 
 await page.getByRole('button', { name: '用这个区域' }).click();
-await page.waitForTimeout(1000);
-await page.getByRole('button', { name: '下一步' }).click();
-await page.waitForTimeout(800);
+await page.waitForSelector('text=选一下科目和章节，就可以保存了', { timeout: 20000 });
+await page.getByRole('button', { name: /更多信息/ }).click();
 await page.getByPlaceholder(/当时为什么错/).fill('PDF 截题测试：根轨迹渐近线角度算错');
 await page.getByRole('button', { name: /保存并加入复习/ }).click();
 await page.waitForSelector('text=已保存，明天起会自动排期复习', { timeout: 20000 });

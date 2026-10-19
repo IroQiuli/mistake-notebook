@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { newId } from '../../lib/id';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, CalendarClock, ImagePlus, PenLine, Trash2 } from 'lucide-react';
@@ -311,6 +312,7 @@ export default function ProblemPage() {
         <ProblemForm
           initial={editInitial}
           submitLabel="保存修改"
+          defaultAdvanced
           onCancel={() => setEditOpen(false)}
           onSubmit={async (value) => {
             await updateProblem(problem.id, value);
@@ -342,7 +344,7 @@ export default function ProblemPage() {
                 base.setDate(base.getDate() + opt.days);
                 await reschedule(problem.id, base.getTime());
                 await db.reviewLogs.add({
-                  id: crypto.randomUUID(),
+                  id: newId(),
                   problemId: problem.id,
                   rating: 0,
                   reviewedAt: Date.now(),

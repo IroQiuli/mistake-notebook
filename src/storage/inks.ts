@@ -1,4 +1,5 @@
 import { db } from './db';
+import { newId } from '../lib/id';
 import type { Ink, InkOwner, Stroke } from '../domain/types';
 
 export async function getInk(id: string): Promise<Ink | undefined> {
@@ -35,7 +36,7 @@ export async function saveInk(args: SaveInkArgs): Promise<string> {
     });
     return args.id;
   }
-  const id = crypto.randomUUID();
+  const id = newId();
   const ink: Ink = {
     id,
     ownerType: args.ownerType,

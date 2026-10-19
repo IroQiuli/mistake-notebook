@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import type { Chapter, ProblemStatus, Topic } from '../../domain/types';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import type { Chapter, ProblemStatus, Subject, Topic } from '../../domain/types';
 import type { ProblemFilter } from '../../domain/filter';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
@@ -10,6 +11,7 @@ interface FilterBarProps {
   onClose: () => void;
   value: ProblemFilter;
   onApply: (next: ProblemFilter) => void;
+  subjects: Subject[];
   chapters: Chapter[];
   topics: Topic[];
   subjectId?: string;
@@ -37,7 +39,7 @@ function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-lg border px-3 py-1.5 text-xs transition-colors',
+        'rounded-lg border px-2.5 py-1 text-xs transition-colors',
         active
           ? 'border-orange-300 bg-orange-50 text-orange-600'
           : 'border-zinc-200 bg-white text-zinc-600'
@@ -48,21 +50,30 @@ function Chip({
   );
 }
 
+function shortName(name: string) {
+  return name.replace('839 自动控制原理及过程控制', '839 自控');
+}
+
 export function FilterBar({
   open,
   onClose,
   value,
   onApply,
+  subjects,
   chapters,
   topics,
   subjectId,
   years,
 }: FilterBarProps) {
   const [draft, setDraft] = useState<ProblemFilter>(value);
+  const [openSubjects, setOpenSubjects] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (open) setDraft(value);
-  }, [open, value]);
+    if (!open) return;
+    setDraft(value);
+    // 进面板时展开当前科目（若在单个科目 Tab 下）
+    setOpenSubjects(new Set(subjectId ? [subjectId] : []));
+  }, [open, value, subjectId]);
 
   const toggle = <K extends 'chapterIds' | 'topicIds' | 'difficulty' | 'years'>(
     key: K,
@@ -73,8 +84,26 @@ export function FilterBar({
     setDraft({ ...draft, [key]: next });
   };
 
-  const visibleChapters = chapters.filter((c) => !subjectId || c.subjectId === subjectId);
-  const visibleTopics = topics.filter((t) => !subjectId || t.subjectId === subjectId);
+  const toggleSubject = (id: string) => {
+    setOpenSubjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const grouped = useMemo(
+    () =>
+      subjects.map((s) => ({
+        subject: s,
+        chapters: chapters
+          .filter((c) => c.subjectId === s.id)
+          .sort((a, b) => a.order - b.order),
+        topics: topics.filter((t) => t.subjectId === s.id),
+      })),
+    [subjects, chapters, topics]
+  );
 
   return (
     <Dialog
@@ -133,35 +162,104 @@ export function FilterBar({
 
         <div>
           <div className="mb-2 text-xs font-medium text-zinc-500">章节</div>
-          <div className="flex flex-wrap gap-2">
-            {visibleChapters.map((c) => (
-              <Chip
-                key={c.id}
-                active={draft.chapterIds?.includes(c.id) ?? false}
-                onClick={() => toggle('chapterIds', c.id)}
-              >
-                {c.name}
-              </Chip>
-            ))}
+          <div className="overflow-hidden rounded-xl border border-zinc-200">
+            {grouped.map(({ subject, chapters: list }, index) => {
+              const isOpen = openSubjects.has(subject.id);
+              const selected = list.filter((c) => draft.chapterIds?.includes(c.id)).length;
+              return (
+                <div
+                  key={subject.id}
+                  className={cn(index > 0 && 'border-t border-zinc-100')}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleSubject(subject.id)}
+                    className="flex w-full items-center justify-between px-3 py-2.5 text-left active:bg-zinc-50"
+                  >
+                    <span className="flex items-center gap-2 text-sm text-zinc-800">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: subject.color }}
+                      />
+                      {shortName(subject.name)}
+                    </span>
+                    <span className="flex items-center gap-2 text-[11px] text-zinc-400">
+                      {selected > 0 ? `已选 ${selected}` : `${list.length} 章`}
+                      <ChevronDown
+                        size={14}
+                        className={cn('transition-transform', isOpen && 'rotate-180')}
+                      />
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="flex flex-wrap gap-1.5 bg-zinc-50/70 px-3 pb-3 pt-1">
+                      {list.map((c) => (
+                        <Chip
+                          key={c.id}
+                          active={draft.chapterIds?.includes(c.id) ?? false}
+                          onClick={() => toggle('chapterIds', c.id)}
+                        >
+                          {c.name}
+                        </Chip>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {visibleTopics.length > 0 && (
-          <div>
-            <div className="mb-2 text-xs font-medium text-zinc-500">知识点</div>
-            <div className="flex flex-wrap gap-2">
-              {visibleTopics.map((t) => (
-                <Chip
-                  key={t.id}
-                  active={draft.topicIds?.includes(t.id) ?? false}
-                  onClick={() => toggle('topicIds', t.id)}
+        <div>
+          <div className="mb-2 text-xs font-medium text-zinc-500">知识点</div>
+          <div className="overflow-hidden rounded-xl border border-zinc-200">
+            {grouped.map(({ subject, topics: list }, index) => {
+              const isOpen = openSubjects.has(subject.id);
+              const selected = list.filter((t) => draft.topicIds?.includes(t.id)).length;
+              if (list.length === 0) return null;
+              return (
+                <div
+                  key={subject.id}
+                  className={cn(index > 0 && 'border-t border-zinc-100')}
                 >
-                  {t.name}
-                </Chip>
-              ))}
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSubject(subject.id)}
+                    className="flex w-full items-center justify-between px-3 py-2.5 text-left active:bg-zinc-50"
+                  >
+                    <span className="flex items-center gap-2 text-sm text-zinc-800">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: subject.color }}
+                      />
+                      {shortName(subject.name)}
+                    </span>
+                    <span className="flex items-center gap-2 text-[11px] text-zinc-400">
+                      {selected > 0 ? `已选 ${selected}` : `${list.length} 个`}
+                      <ChevronDown
+                        size={14}
+                        className={cn('transition-transform', isOpen && 'rotate-180')}
+                      />
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="flex flex-wrap gap-1.5 bg-zinc-50/70 px-3 pb-3 pt-1">
+                      {list.map((t) => (
+                        <Chip
+                          key={t.id}
+                          active={draft.topicIds?.includes(t.id) ?? false}
+                          onClick={() => toggle('topicIds', t.id)}
+                        >
+                          {t.name}
+                        </Chip>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
 
         {years.length > 0 && (
           <div>

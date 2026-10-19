@@ -10,16 +10,22 @@ interface ProblemFormProps {
   initial: MetaValue;
   previewUrl?: string | null;
   submitLabel?: string;
+  /** 编辑已有错题时直接展开「更多信息」 */
+  defaultAdvanced?: boolean;
   onSubmit: (meta: MetaValue) => Promise<void>;
   onCancel?: () => void;
+  /** 题目预览下方的附加操作，例如「调整图片」 */
+  previewAction?: React.ReactNode;
 }
 
 export function ProblemForm({
   initial,
   previewUrl,
   submitLabel = '保存并加入复习',
+  defaultAdvanced = false,
   onSubmit,
   onCancel,
+  previewAction,
 }: ProblemFormProps) {
   const subjects = useLiveQuery(() => db.subjects.orderBy('order').toArray(), [], []);
   const chapters = useLiveQuery(() => db.chapters.toArray(), [], []) as Chapter[];
@@ -50,6 +56,7 @@ export function ProblemForm({
           <img src={previewUrl} alt="题目预览" className="max-h-56 w-full object-contain" />
         </div>
       )}
+      {previewAction}
 
       <MetadataFields
         value={meta}
@@ -57,6 +64,7 @@ export function ProblemForm({
         subjects={subjects ?? []}
         chapters={chapters ?? []}
         topics={topics ?? []}
+        defaultAdvanced={defaultAdvanced}
       />
 
       {error && <p className="text-xs text-red-500">{error}</p>}

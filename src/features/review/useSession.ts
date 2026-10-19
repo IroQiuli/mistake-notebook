@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { newId } from '../../lib/id';
 import { db } from '../../storage/db';
 import { buildQueue, type QueueItem } from '../../domain/queue';
 import { applyRating } from '../../domain/scheduler';
@@ -53,7 +54,7 @@ export function useSession(subjectId?: string) {
       await db.transaction('rw', db.cards, db.reviewLogs, async () => {
         await db.cards.put(result.card);
         await db.reviewLogs.add({
-          id: crypto.randomUUID(),
+          id: newId(),
           problemId: current.problem.id,
           rating,
           reviewedAt: now,
