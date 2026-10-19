@@ -14,7 +14,7 @@ import type {
 } from '../domain/types';
 
 const FORMAT = 1;
-export const APP_VERSION = '0.2.0';
+export const APP_VERSION = '0.3.0';
 
 interface BackupData {
   subjects: Subject[];

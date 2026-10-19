@@ -8,45 +8,122 @@ export interface QueueOptions {
   subjectId?: string;
   /** 按科目轮转打散，默认开启 */
   interleave?: boolean;
+  /**
+   * 每科每日题量：{ subjectId: 数量 }。
+   * - 设了数量的科目：只取这么多，不够时按「最快到期」补未到期的题（auto 标记）
+   * - 没出现在表里的科目：保持旧行为（所有到期题都进来）
+   * - 数量为 0：今天不做这一科
+   */
+  quotas?: Record<string, number>;
 }
 
 export interface QueueItem {
   problem: Problem;
   card: Card;
   overdueDays: number;
+  /** 为了凑够每日题量而提前拉进来的题 */
+  auto?: boolean;
 }
 
 export function buildQueue(problems: Problem[], cards: Card[], opts: QueueOptions): QueueItem[] {
-  const { now, newLimit = 30, subjectId, interleave = true } = opts;
+  const { now, newLimit = 30, subjectId, interleave = true, quotas } = opts;
   const end = learningDayEnd(now);
   const cardMap = new Map(cards.map((c) => [c.problemId, c]));
 
   const due: QueueItem[] = [];
   const fresh: QueueItem[] = [];
+  const later: QueueItem[] = [];
 
   for (const p of problems) {
     if (p.archivedAt) continue;
     if (subjectId && p.subjectId !== subjectId) continue;
     const c = cardMap.get(p.id);
-    if (!c || c.due > end) continue;
+    if (!c) continue;
     const overdueDays = Math.max(0, Math.floor((end - c.due) / 86400000));
     const item: QueueItem = { problem: p, card: c, overdueDays };
-    if (c.state === 0) fresh.push(item);
-    else due.push(item);
+    if (c.due > end) {
+      later.push(item);
+    } else if (c.state === 0) {
+      fresh.push(item);
+    } else {
+      due.push(item);
+    }
   }
 
-  due.sort(
+  sortDue(due);
+  fresh.sort((a, b) => a.problem.createdAt - b.problem.createdAt);
+  const limitedFresh = newLimit === 0 ? fresh : fresh.slice(0, newLimit);
+  const duePool = [...due, ...limitedFresh];
+
+  const hasQuotas = quotas && Object.keys(quotas).length > 0;
+  const all = hasQuotas ? applyQuotas(duePool, later, quotas) : duePool;
+
+  return interleave ? interleaveBySubject(all) : all;
+}
+
+/** 到期题排序：逾期越久越靠前，其次更难、更早到期 */
+function sortDue(items: QueueItem[]): void {
+  items.sort(
     (a, b) =>
       b.overdueDays - a.overdueDays ||
       b.problem.difficulty - a.problem.difficulty ||
       a.card.due - b.card.due
   );
-  fresh.sort((a, b) => a.problem.createdAt - b.problem.createdAt);
+}
 
-  const limitedFresh = newLimit === 0 ? fresh : fresh.slice(0, newLimit);
-  const all = [...due, ...limitedFresh];
+/**
+ * 按每科题量裁剪队列；不足的科目从「还没到期」的题里按到期时间从近到远补齐。
+ * 补齐只是提前复习，不会改动排期本身。
+ */
+function applyQuotas(
+  duePool: QueueItem[],
+  later: QueueItem[],
+  quotas: Record<string, number>
+): QueueItem[] {
+  const bySubjectDue = new Map<string, QueueItem[]>();
+  for (const it of duePool) {
+    const arr = bySubjectDue.get(it.problem.subjectId) ?? [];
+    arr.push(it);
+    bySubjectDue.set(it.problem.subjectId, arr);
+  }
 
-  return interleave ? interleaveBySubject(all) : all;
+  const bySubjectLater = new Map<string, QueueItem[]>();
+  for (const it of later) {
+    const arr = bySubjectLater.get(it.problem.subjectId) ?? [];
+    arr.push(it);
+    bySubjectLater.set(it.problem.subjectId, arr);
+  }
+  for (const arr of bySubjectLater.values()) {
+    arr.sort((a, b) => a.card.due - b.card.due || a.card.stability - b.card.stability);
+  }
+
+  const subjects = new Set([...bySubjectDue.keys(), ...bySubjectLater.keys()]);
+  const out: QueueItem[] = [];
+
+  for (const sid of subjects) {
+    const quota = quotas[sid];
+    const dueList = bySubjectDue.get(sid) ?? [];
+
+    if (quota === undefined) {
+      out.push(...dueList);
+      continue;
+    }
+    if (quota <= 0) continue;
+
+    const taken = dueList.slice(0, quota);
+    out.push(...taken);
+
+    if (taken.length < quota) {
+      const fillers = (bySubjectLater.get(sid) ?? [])
+        .slice(0, quota - taken.length)
+        .map((it) => ({ ...it, auto: true }));
+      out.push(...fillers);
+    }
+  }
+
+  // 到期的整体排在「补齐的」前面
+  out.sort((a, b) => Number(!!a.auto) - Number(!!b.auto));
+  return out;
 }
 
 function interleaveBySubject(items: QueueItem[]): QueueItem[] {

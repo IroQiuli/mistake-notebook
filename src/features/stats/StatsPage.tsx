@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, ChevronDown } from 'lucide-react';
 import { db } from '../../storage/db';
+import { Collapsible } from '../../ui/Collapsible';
 import {
   accuracyByChapter,
   accuracyBySubject,
@@ -119,7 +120,7 @@ function Forecast({
 }) {
   const max = Math.max(1, ...days.map((d) => d.count));
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+    <section className="rounded-2xl border border-zinc-200 bg-white p-4" data-testid="forecast">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-sm font-medium text-zinc-800">未来 14 天到期</h2>
         <button type="button" onClick={onPick} className="text-[11px] text-orange-600">
@@ -247,12 +248,20 @@ export default function StatsPage() {
 
       <Forecast days={forecastDays} onPick={() => navigate('/review')} />
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-zinc-800">回忆正确率</h2>
-          <span className="text-[10px] text-zinc-400">近 30 天 · 点科目展开章节</span>
-        </div>
+      <div className="flex items-center gap-2 pt-1">
+        <span className="h-px flex-1 bg-zinc-200" />
+        <span className="text-[11px] text-zinc-400">深入分析 · 点开看细节</span>
+        <span className="h-px flex-1 bg-zinc-200" />
+      </div>
 
+      <Collapsible
+        title="回忆正确率"
+        summary={
+          accTotals.total
+            ? `近 30 天 ${accTotals.total} 次评分 · 正确率 ${Math.round(overallAccuracy * 100)}%`
+            : '近 30 天还没有评分记录'
+        }
+      >
         {accSubjects.length === 0 ? (
           <p className="py-4 text-center text-xs text-zinc-400">近 30 天还没有评分记录</p>
         ) : (
@@ -339,12 +348,21 @@ export default function StatsPage() {
         <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
           正确率 = 自评「记得 / 熟练」的次数占比；评「忘记 / 模糊」都算这次没回忆起来。
         </p>
-      </section>
+      </Collapsible>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+      <Collapsible
+        title="错因分布"
+        summary={
+          tagDist.length
+            ? `${tagDist[0].tag}最多（${tagDist[0].count} 题）· 共 ${tagDist.reduce((s, t) => s + t.count, 0)} 个标签`
+            : '还没有打错因标签'
+        }
+      >
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-sm font-medium text-zinc-800">错因分布</h2>
-          <span className="text-[10px] text-zinc-400">共 {tagDist.reduce((s, t) => s + t.count, 0)} 个标签</span>
+          <span className="text-[11px] text-zinc-400">按未掌握题目的标签统计</span>
+          <span className="text-[10px] text-zinc-400">
+            共 {tagDist.reduce((s, t) => s + t.count, 0)} 个标签
+          </span>
         </div>
 
         {tagDist.length === 0 ? (
@@ -372,14 +390,16 @@ export default function StatsPage() {
             ))}
           </ul>
         )}
-      </section>
+      </Collapsible>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-zinc-800">章节掌握度</h2>
-          <span className="text-[10px] text-zinc-400">越靠前越薄弱，可一键加练</span>
-        </div>
-
+      <Collapsible
+        title="章节掌握度"
+        summary={
+          mastery.length
+            ? `最弱：${mastery[0].chapterName} ${Math.round(mastery[0].retention * 100)}% · 可一键加练`
+            : '还没有错题'
+        }
+      >
         <div className="no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
           <button
             type="button"
@@ -464,7 +484,7 @@ export default function StatsPage() {
           掌握度 = 该章节题目的平均记忆保持率（FSRS 预测「现在还记得」的概率），
           已标记掌握的题按 100% 计。点章节看错题，点「加练」把最弱的 5 道提前到今天。
         </p>
-      </section>
+      </Collapsible>
 
       <div className="h-2" />
     </div>

@@ -10,7 +10,11 @@ export interface SessionStats {
   ms: number;
 }
 
-export function useSession(subjectId?: string) {
+/**
+ * @param subjectId 只复习某个科目（今日页的科目快捷入口）
+ * @param paperIds  套卷模式的题目顺序；传了就不看到期状态，按给定顺序逐题做
+ */
+export function useSession(subjectId?: string, paperIds?: string[] | null) {
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -21,10 +25,24 @@ export function useSession(subjectId?: string) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [problems, cards] = await Promise.all([
-        db.problems.toArray(),
-        db.cards.toArray(),
-      ]);
+      if (paperIds && paperIds.length > 0) {
+        const [problems, cards] = await Promise.all([db.problems.toArray(), db.cards.toArray()]);
+        const pMap = new Map(problems.map((p) => [p.id, p]));
+        const cMap = new Map(cards.map((c) => [c.problemId, c]));
+        const items: QueueItem[] = [];
+        for (const id of paperIds) {
+          const p = pMap.get(id);
+          const c = cMap.get(id);
+          if (p && c) items.push({ problem: p, card: c, overdueDays: 0 });
+        }
+        if (!cancelled) {
+          setQueue(items);
+          setShownAt(Date.now());
+        }
+        return;
+      }
+
+      const [problems, cards] = await Promise.all([db.problems.toArray(), db.cards.toArray()]);
       const built = buildQueue(problems, cards, { now: Date.now(), subjectId });
       if (!cancelled) {
         setQueue(built);
@@ -34,7 +52,7 @@ export function useSession(subjectId?: string) {
     return () => {
       cancelled = true;
     };
-  }, [subjectId]);
+  }, [subjectId, paperIds]);
 
   const current = queue?.[index];
   const finished = queue !== null && index >= queue.length;

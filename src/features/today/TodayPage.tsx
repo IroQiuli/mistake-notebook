@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronRight, Flame, Plus } from 'lucide-react';
+import { ChevronRight, FileStack, Flame, Plus } from 'lucide-react';
 import { db, getSetting } from '../../storage/db';
 import { buildQueue } from '../../domain/queue';
 import { dayKey, formatToday, learningDayStart } from '../../domain/time';
@@ -10,6 +10,7 @@ import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import { EmptyState } from '../../ui/EmptyState';
 import { cn } from '../../ui/cn';
+import { DetailDialog, type DetailMode } from './DetailDialog';
 
 function GoalRing({ done, goal }: { done: number; goal: number }) {
   const pct = Math.min(1, done / Math.max(1, goal));
@@ -49,11 +50,33 @@ export default function TodayPage() {
   const chapters = useLiveQuery(() => db.chapters.toArray(), [], []);
   const logs = useLiveQuery(() => db.reviewLogs.toArray(), [], []);
   const lastBackupAt = useLiveQuery(() => getSetting<number>('lastBackupAt', 0), [], 0);
+  const dailyGoal = useLiveQuery(() => getSetting<number>('dailyGoal', 20), [], 20);
+  const subjectGoals = useLiveQuery(
+    () => getSetting<Record<string, number>>('subjectGoals', {}),
+    [],
+    {}
+  );
 
   const [openOffset, setOpenOffset] = useState<number | null>(null);
-  const now = Date.now();
-  const queue = useMemo(() => buildQueue(problems, cards, { now }), [problems, cards, now]);
+  const [detail, setDetail] = useState<DetailMode | null>(null);
+  const [now] = useState(() => Date.now());
+
+  const quotas = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const [sid, n] of Object.entries(subjectGoals ?? {})) {
+      if (Number.isFinite(n)) out[sid] = n;
+    }
+    return out;
+  }, [subjectGoals]);
+
+  const hasQuotas = Object.keys(quotas).length > 0;
+  const queue = useMemo(
+    () => buildQueue(problems, cards, { now, quotas: hasQuotas ? quotas : undefined }),
+    [problems, cards, now, quotas, hasQuotas]
+  );
   const streak = calcStreak(logs, now);
+
+  const problemMap = useMemo(() => new Map(problems.map((p) => [p.id, p])), [problems]);
 
   const perSubject = useMemo(() => {
     const map = new Map<string, number>();
@@ -63,10 +86,31 @@ export default function TodayPage() {
     return map;
   }, [queue]);
 
-  const todayReviewed = logs.filter((l) => dayKey(l.reviewedAt) === dayKey(now)).length;
-  const weekReviewed = logs.filter((l) => l.reviewedAt >= now - 7 * 24 * 3600 * 1000).length;
+  /** 今天每个科目已经复习了几道（按科目统计评分次数） */
+  const reviewedBySubject = useMemo(() => {
+    const map = new Map<string, number>();
+    const today = dayKey(now);
+    for (const l of logs) {
+      if (l.rating === 0) continue;
+      if (dayKey(l.reviewedAt) !== today) continue;
+      const p = problemMap.get(l.problemId);
+      if (!p) continue;
+      map.set(p.subjectId, (map.get(p.subjectId) ?? 0) + 1);
+    }
+    return map;
+  }, [logs, problemMap, now]);
+
+  const todayReviewed = logs.filter(
+    (l) => l.rating !== 0 && dayKey(l.reviewedAt) === dayKey(now)
+  ).length;
+  const weekReviewed = logs.filter(
+    (l) => l.rating !== 0 && l.reviewedAt >= now - 7 * 24 * 3600 * 1000
+  ).length;
   const activeCount = problems.filter((p) => !p.archivedAt).length;
-  const dailyGoal = useLiveQuery(() => getSetting<number>('dailyGoal', 20), [], 20);
+
+  const goalTotal = hasQuotas
+    ? Object.values(quotas).reduce((s, n) => s + Math.max(0, n), 0)
+    : dailyGoal;
 
   const chapterMap = useMemo(() => new Map(chapters.map((c) => [c.id, c])), [chapters]);
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
@@ -84,6 +128,10 @@ export default function TodayPage() {
     ? Math.floor((learningDayStart(now) - learningDayStart(lastBackupAt)) / 86400000)
     : null;
   const needBackup = lastBackupAt === 0 || (backupDays ?? 0) >= 7;
+
+  const quotaSubjects = hasQuotas
+    ? subjects.filter((s) => (quotas[s.id] ?? 0) > 0)
+    : [];
 
   return (
     <div className="space-y-4">
@@ -115,30 +163,69 @@ export default function TodayPage() {
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5">
         <div className="flex items-baseline gap-2">
-          <span className="text-4xl font-semibold tabular-nums text-zinc-900">{queue.length}</span>
+          <span data-testid="queue-count" className="text-4xl font-semibold tabular-nums text-zinc-900">
+            {queue.length}
+          </span>
           <span className="text-sm text-zinc-500">道待复习</span>
         </div>
+
+        {quotaSubjects.length > 0 && (
+          <div className="mt-3 space-y-1.5 rounded-xl bg-zinc-50 px-3 py-2.5">
+            {quotaSubjects.map((s) => {
+              const done = reviewedBySubject.get(s.id) ?? 0;
+              const goal = quotas[s.id] ?? 0;
+              const pct = Math.min(1, done / Math.max(1, goal));
+              return (
+                <div key={s.id} className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className="w-20 shrink-0 truncate text-[11px] text-zinc-600">
+                    {s.name.replace('839 自动控制原理及过程控制', '839 自控')}
+                  </span>
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200">
+                    <span
+                      className="block h-full rounded-full transition-[width]"
+                      style={{
+                        width: `${pct * 100}%`,
+                        backgroundColor: done >= goal ? '#10b981' : s.color,
+                      }}
+                    />
+                  </span>
+                  <span
+                    className={cn(
+                      'w-9 shrink-0 text-right text-[11px] tabular-nums',
+                      done >= goal ? 'text-emerald-600' : 'text-zinc-500'
+                    )}
+                  >
+                    {done}/{goal}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {queue.length > 0 ? (
-          <Button
-            variant="primary"
-            size="xl"
-            block
-            className="mt-4"
-            onClick={() => navigate('/review')}
-          >
-            开始复习
-          </Button>
+          <div className="mt-4 flex gap-2">
+            <Button variant="primary" size="xl" className="flex-1" onClick={() => navigate('/review')}>
+              开始复习
+            </Button>
+            <Button size="xl" onClick={() => navigate('/paper')} aria-label="组一套卷">
+              <FileStack size={18} />
+              组卷
+            </Button>
+          </div>
         ) : (
           <div className="mt-4 rounded-xl bg-zinc-50 py-6 text-center">
             <p className="text-sm text-zinc-500">今天没有到期的错题</p>
-            <Button
-              variant="primary"
-              size="md"
-              className="mt-3"
-              onClick={() => navigate('/capture')}
-            >
-              去录一道错题
-            </Button>
+            <div className="mt-3 flex justify-center gap-2">
+              <Button variant="primary" size="md" onClick={() => navigate('/capture')}>
+                去录一道错题
+              </Button>
+              <Button size="md" onClick={() => navigate('/paper')}>
+                <FileStack size={16} />
+                组一套卷
+              </Button>
+            </div>
           </div>
         )}
 
@@ -167,13 +254,14 @@ export default function TodayPage() {
       </section>
 
       <section className="flex items-center gap-4 rounded-2xl border border-zinc-200 bg-white px-4 py-3">
-        <GoalRing done={todayReviewed} goal={dailyGoal} />
+        <GoalRing done={todayReviewed} goal={goalTotal} />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-zinc-800">今日目标</div>
           <div className="mt-0.5 text-[11px] text-zinc-500">
-            {todayReviewed >= dailyGoal
-              ? `已完成，多做了 ${todayReviewed - dailyGoal} 题`
-              : `还差 ${dailyGoal - todayReviewed} 题`}
+            {todayReviewed >= goalTotal
+              ? `已完成，多做了 ${todayReviewed - goalTotal} 题`
+              : `还差 ${goalTotal - todayReviewed} 题`}
+            {hasQuotas && <span className="text-zinc-400"> · 各科合计</span>}
           </div>
         </div>
         <Link to="/settings" className="shrink-0 text-[11px] text-zinc-400">
@@ -182,15 +270,25 @@ export default function TodayPage() {
       </section>
 
       <section className="grid grid-cols-3 gap-2.5">
-        {[
-          { label: '今日已复习', value: todayReviewed },
-          { label: '近 7 天', value: weekReviewed },
-          { label: '未掌握', value: activeCount },
-        ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-zinc-200 bg-white px-3 py-3">
-            <div className="text-xl font-semibold tabular-nums text-zinc-900">{s.value}</div>
+        {(
+          [
+            { key: 'today', label: '今日已复习', value: todayReviewed },
+            { key: 'week', label: '近 7 天', value: weekReviewed },
+            { key: 'active', label: '未掌握', value: activeCount },
+          ] as const
+        ).map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setDetail(s.key)}
+            className="rounded-xl border border-zinc-200 bg-white px-3 py-3 text-left transition-colors active:bg-zinc-50"
+          >
+            <div className="flex items-baseline justify-between">
+              <span className="text-xl font-semibold tabular-nums text-zinc-900">{s.value}</span>
+              <ChevronRight size={13} className="text-zinc-300" />
+            </div>
             <div className="mt-0.5 text-[11px] text-zinc-500">{s.label}</div>
-          </div>
+          </button>
         ))}
       </section>
 
@@ -235,6 +333,8 @@ export default function TodayPage() {
         )}
       </section>
 
+      <DetailDialog mode={detail} onClose={() => setDetail(null)} />
+
       <Dialog
         open={openOffset !== null}
         onClose={() => setOpenOffset(null)}
@@ -277,8 +377,7 @@ export default function TodayPage() {
 
       <footer className={cn('pt-2 text-center text-[11px] leading-relaxed text-zinc-400')}>
         数据只保存在这台设备的浏览器里
-        <br />
-        在「我的」里可以导出备份
+        <br />在「我的」里可以导出备份
       </footer>
     </div>
   );

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, FileStack } from 'lucide-react';
 import { db } from '../../storage/db';
+import { clearActivePaper, loadActivePaper, type ActivePaper } from '../../storage/paper';
 import { getUrl } from '../../storage/assets';
 import { latestInk } from '../../storage/inks';
 import { previewIntervals } from '../../domain/scheduler';
@@ -104,11 +105,13 @@ function WriteArea({
   );
 }
 
-export default function ReviewPage() {
+function ReviewBody({ subjectId, paper }: { subjectId?: string; paper: ActivePaper | null }) {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const subjectId = params.get('subject') ?? undefined;
-  const { queue, index, current, revealed, finished, summary, reveal, rate } = useSession(subjectId);
+  const paperIds = paper?.problemIds;
+  const { queue, index, current, revealed, finished, summary, reveal, rate } = useSession(
+    subjectId,
+    paperIds
+  );
 
   const [showOldInk, setShowOldInk] = useState(false);
   const [writing, setWriting] = useState(false);
@@ -161,6 +164,11 @@ export default function ReviewPage() {
     setWriting(false);
   }, [problemId]);
 
+  // 套卷做完就清掉，避免下次进来又在做同一张
+  useEffect(() => {
+    if (finished && paper) void clearActivePaper();
+  }, [finished, paper]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (finished) return;
@@ -182,16 +190,19 @@ export default function ReviewPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [revealed, finished, rate, reveal]);
 
-  if (queue === null) return <PageLoading label="准备复习队列" />;
+  if (queue === null) return <PageLoading label={paper ? '准备套卷' : '准备复习队列'} />;
 
   if (finished) {
     return (
       <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center px-6">
         <div className="text-center">
           <div className="text-4xl">🎉</div>
-          <h1 className="mt-3 text-xl font-semibold text-zinc-900">这一轮复习完了</h1>
+          <h1 className="mt-3 text-xl font-semibold text-zinc-900">
+            {paper ? '这套卷做完了' : '这一轮复习完了'}
+          </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            共 {summary.total} 题 · 用时 {formatDuration(summary.durationMs)}
+            {paper ? `${paper.title} · ` : ''}共 {summary.total} 题 · 用时{' '}
+            {formatDuration(summary.durationMs)}
           </p>
         </div>
         <div className="mt-6 space-y-2 rounded-2xl border border-zinc-200 bg-white p-4">
@@ -203,7 +214,18 @@ export default function ReviewPage() {
           ))}
         </div>
         <div className="mt-6 space-y-2">
-          <Button variant="primary" size="lg" block onClick={() => navigate('/')}>
+          {paper && (
+            <Button variant="primary" size="lg" block onClick={() => navigate('/paper')}>
+              <FileStack size={16} />
+              再组一套
+            </Button>
+          )}
+          <Button
+            variant={paper ? 'secondary' : 'primary'}
+            size="lg"
+            block
+            onClick={() => navigate('/')}
+          >
             回到今日
           </Button>
           <Button size="lg" block onClick={() => navigate('/library')}>
@@ -224,8 +246,12 @@ export default function ReviewPage() {
       <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center px-6">
         <EmptyState
           icon={<Eye size={30} />}
-          title="没有到期的错题"
-          description="今天先休息一下，或者去录几道新错题。"
+          title={paper ? '这张卷子里的题不见了' : '没有到期的错题'}
+          description={
+            paper
+              ? '题可能被删掉了，回今日重新组一套吧。'
+              : '今天先休息一下，或者去录几道新错题。'
+          }
           action={
             <div className="flex gap-2">
               <Button variant="primary" onClick={() => navigate('/capture')}>
@@ -250,13 +276,20 @@ export default function ReviewPage() {
         >
           <ArrowLeft size={20} />
         </button>
-        <div className="text-center">
+        <div className="min-w-0 text-center">
           <div className="text-xs font-medium text-zinc-700">
             {index + 1} / {queue.length}
+            {paper && <span className="ml-1 text-[10px] text-orange-500">套卷</span>}
           </div>
-          <div className="text-[11px] text-zinc-400">
-            {subject?.name.replace('839 自动控制原理及过程控制', '839 自控')} ·{' '}
-            {chapter?.name ?? '未分类'}
+          <div className="truncate text-[11px] text-zinc-400">
+            {paper ? (
+              paper.title
+            ) : (
+              <>
+                {subject?.name.replace('839 自动控制原理及过程控制', '839 自控')} ·{' '}
+                {chapter?.name ?? '未分类'}
+              </>
+            )}
           </div>
         </div>
         <button
@@ -365,4 +398,48 @@ export default function ReviewPage() {
       </Dialog>
     </div>
   );
+}
+
+function PaperReview() {
+  const navigate = useNavigate();
+  const [paper, setPaper] = useState<ActivePaper | null | undefined>(undefined);
+
+  useEffect(() => {
+    loadActivePaper()
+      .then(setPaper)
+      .catch(() => setPaper(null));
+  }, []);
+
+  if (paper === undefined) return <PageLoading label="准备套卷" />;
+
+  if (!paper) {
+    return (
+      <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center px-6">
+        <EmptyState
+          icon={<FileStack size={30} />}
+          title="没有进行中的套卷"
+          description="去「组一套卷」挑一份题单，或者先做今天到期的题。"
+          action={
+            <div className="flex gap-2">
+              <Button variant="primary" onClick={() => navigate('/paper')}>
+                去组卷
+              </Button>
+              <Button onClick={() => navigate('/')}>回到今日</Button>
+            </div>
+          }
+        />
+      </div>
+    );
+  }
+
+  return <ReviewBody paper={paper} />;
+}
+
+export default function ReviewPage() {
+  const [params] = useSearchParams();
+  const paperMode = params.get('paper') === '1';
+  const subjectId = params.get('subject') ?? undefined;
+
+  if (paperMode) return <PaperReview />;
+  return <ReviewBody subjectId={subjectId} paper={null} />;
 }

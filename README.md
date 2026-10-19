@@ -4,22 +4,28 @@
 
 - 录题三步：拍照 / 相册 / PDF 翻页 → 拖框选出这道题（双指缩放、按住框可拖动）→ 选科目和章节，保存。其余信息（错因标签、来源类型、知识点、难度、来源、错误原因）收在「更多信息」里
 - 复习：每天自动列出到期的错题，四档自评后 FSRS-5 计算下次时间；答案图默认隐藏，点开后可放大
+- 每科题量：在「我的 → 学习目标」给每科定每天几道；到期的题不够就自动从该科「最快要到期」的题里补齐，超出部分留到明天
 - 手写：默认关闭，点「开启手写」才接管触摸（之前可以正常上下滑动）；平板上可直接在题干批注，复习时另起一层作答
-- 统计：16 周热力图、未来 14 天到期预测、按科目/章节的正确率、错因分布、章节掌握度与一键加练
-- 首页：今日队列 + 今日目标进度环 + 接下来 1/3/7 天各有多少题到期
+- 套卷：按分类挑题组一张有顺序的卷子，或按遗忘曲线抽「最可能忘」的题；839 按历年真题卷型固定 8 道大题（一题一章），数学二 22 题
+- 统计：16 周热力图、未来 14 天到期预测常开，正确率 / 错因分布 / 章节掌握度折叠成一行摘要，点开才展开
+- 首页：今日队列 + 每科进度条 + 今日目标进度环 + 接下来 1/3/7 天；「今日已复习 / 近 7 天 / 未掌握」三张卡点开可逐题细看
 - 改期：3 / 7 / 14 / 30 天，或自定义任意天数
 - 分类：科目 → 章节 → 知识点标签；「真题」单独成一支，可按年份筛选
 - 备份：一键导出**加密**备份（AES-256-GCM），换设备时导入恢复；带存储持久化状态与数据完整性自检
 
 ## 截图
 
-| 今日 | 复习手写 | 批注 |
+| 今日（每科题量 + 组卷入口） | 近 7 天细看 | 组一套卷 |
 | --- | --- | --- |
-| ![今日](docs/screenshots/today.png) | ![复习手写](docs/screenshots/review-writing.png) | ![批注](docs/screenshots/problem-annotated.png) |
+| ![今日](docs/screenshots/today.png) | ![近 7 天](docs/screenshots/week-detail.png) | ![组卷](docs/screenshots/paper.png) |
 
-| 统计 | 正确率（按科目展开） | PDF 截题 |
+| 套卷作答 | 统计（折叠） | 统计（展开） |
 | --- | --- | --- |
-| ![统计](docs/screenshots/stats.png) | ![正确率](docs/screenshots/accuracy.png) | ![PDF](docs/screenshots/pdf-picker.png) |
+| ![套卷](docs/screenshots/paper-review.png) | ![统计](docs/screenshots/stats.png) | ![统计展开](docs/screenshots/stats-open.png) |
+
+| 每科题量 | 复习手写 | 批注 |
+| --- | --- | --- |
+| ![每科题量](docs/screenshots/goals.png) | ![复习手写](docs/screenshots/review-writing.png) | ![批注](docs/screenshots/problem-annotated.png) |
 
 | 错题本 | 真题筛选 | 加密备份 |
 | --- | --- | --- |
@@ -75,6 +81,8 @@ node scripts/e2e-smoke.mjs    # 录题→复习→手写→批注→统计
 node scripts/e2e-stats.mjs    # 灌演示数据并截统计页
 node scripts/e2e-pdf.mjs      # 用 ../考研资料/自控 里的真题 PDF 跑一遍截题
 node scripts/e2e-backup.mjs   # 加密导出 → 全新浏览器配置导入还原
+node scripts/e2e-paper.mjs    # 每科题量 + 首页细看 + 套卷组卷作答
+node scripts/shots-demo.mjs   # 生成 README 用的演示截图（docs/screenshots）
 ```
 
 ## 数据是怎么保存的
@@ -121,14 +129,39 @@ cuotiben-backup-20261019.zip         # 不加密（仅临时搬运）
 **没做云同步**，这是刻意的：多端同时改同一道题时，自动同步需要冲突合并策略和服务端，
 而"导出 → 导入（同 id 覆盖）"在单人使用时语义更可预期。代价是换设备要手动搬一次备份。
 
+## 套卷与每科题量
+
+**每科题量**：`我的 → 学习目标`，每科填一个数（留空 = 按到期全做，0 = 这科今天不做）。
+今日队列按「到期优先 → 不够就补该科最快要到期的题」组成，超出的部分留到明天。
+首页会显示每科的 `已做 / 目标` 进度条。
+
+**套卷**（`今日 → 组卷`）两种挑法：
+
+| 模式 | 规则 |
+| --- | --- |
+| 按分类 | 选科目（可多选）、题量、只看真题；按章节轮转抽题，保证一张卷覆盖尽量多的章节 |
+| 按遗忘曲线 | 按 FSRS 的「现在还记得的概率」从低到高抽，先练最可能忘的 |
+
+题量默认值来自历年真题卷型（`src/domain/paper.ts` 的 `PAPER_PRESETS`）：
+
+| 科目 | 默认 | 依据 |
+| --- | --- | --- |
+| 数学二 | 22 题 | 10 选择 + 6 填空 + 6 解答 |
+| 839 自控 | 8 道大题 | 第 1~6 题自控（建模/时域/根轨迹/频域校正/非线性/离散），第 7~8 题过控（检测仪表与机理建模 / 复杂控制方案设计），一题一章 |
+| 英语二 | 48 题 | 先给默认值，可手动改 |
+| 政治 | 38 题 | 先给默认值，可手动改 |
+
+生成的卷子存成 `settings.activePaper`（只存题目顺序），复习时按顺序走同一套
+「看答案 → 四档评分」流程，评分照常写进 FSRS。做完自动清除，可一键「再组一套」。
+
 ## 结构
 
 ```
 src/
-  domain/     纯逻辑：类型、学习日、FSRS 排期、复习队列、检索筛选
-  storage/    Dexie schema、种子数据、图片、CRUD、加密备份、完整性自检
-  features/   today / capture / library / problem / review / stats / settings
-  ui/         Button、Dialog、Toast、EmptyState、ZoomableImage
+  domain/     纯逻辑：类型、学习日、FSRS 排期、复习队列、套卷挑选、检索筛选
+  storage/    Dexie schema、种子数据、图片、CRUD、加密备份、完整性自检、进行中的套卷
+  features/   today / capture / library / problem / review / stats / paper / settings
+  ui/         Button、Dialog、Collapsible、Toast、EmptyState、ZoomableImage
   hooks/      useAssetUrl
 .github/workflows/deploy.yml   GitHub Pages 构建与发布
 ```
@@ -142,6 +175,7 @@ src/
 - [x] **M3 能导卷子**：PDF 翻页渲染 + 高分辨率截题（Word 导入待做）
 - [x] **M4 有反馈**：复习热力图、14 天到期预测、章节掌握度、错因分布、每日目标
 - [x] **M5 可安装**：GitHub Pages 部署、加密备份、存储持久化、完整性自检
+- [x] **M6 能组卷**：每科每日题量、首页卡片逐题细看、统计折叠、按分类/遗忘曲线组套卷
 
 设计文档见 `docs/superpowers/specs/2026-10-19-cuotiben-design.md`，
 实施计划见 `docs/superpowers/plans/2026-10-19-m1-capture-review.md`。

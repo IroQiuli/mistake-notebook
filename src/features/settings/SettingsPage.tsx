@@ -53,6 +53,8 @@ export default function SettingsPage() {
   const [checking, setChecking] = useState(false);
   const [openSubject, setOpenSubject] = useState<string | null>(null);
   const [newChapter, setNewChapter] = useState('');
+  /** 每科题量草稿：'' 表示不设（按到期全做），'0' 表示这科今天不做 */
+  const [quotaDraft, setQuotaDraft] = useState<Record<string, string>>({});
 
   const subjects = useLiveQuery(() => db.subjects.orderBy('order').toArray(), [], []);
   const chapters = useLiveQuery(() => db.chapters.toArray(), [], []);
@@ -72,6 +74,13 @@ export default function SettingsPage() {
   useEffect(() => {
     getSetting<number>('dailyGoal', 20)
       .then((v) => setGoalInput(String(v)))
+      .catch(() => {});
+    getSetting<Record<string, number>>('subjectGoals', {})
+      .then((goals) => {
+        const draft: Record<string, string> = {};
+        for (const [sid, n] of Object.entries(goals ?? {})) draft[sid] = String(n);
+        setQuotaDraft(draft);
+      })
       .catch(() => {});
   }, []);
 
@@ -292,8 +301,72 @@ export default function SettingsPage() {
       </Section>
 
       <Section title="学习目标">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-zinc-700">每天复习</span>
+        <div className="flex items-baseline justify-between">
+          <span className="text-xs text-zinc-500">每科每天几道（留空 = 按到期全做）</span>
+          <span className="text-[11px] text-zinc-400">
+            合计{' '}
+            {Object.values(quotaDraft).reduce((s, v) => s + (Number(v) || 0), 0)} 道
+          </span>
+        </div>
+
+        <ul className="mt-2 space-y-1.5">
+          {subjects.map((s) => (
+            <li key={s.id} className="flex items-center gap-2">
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: s.color }}
+              />
+              <span className="min-w-0 flex-1 truncate text-sm text-zinc-700">
+                {s.name.replace('839 自动控制原理及过程控制', '839 自控')}
+              </span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={99}
+                value={quotaDraft[s.id] ?? ''}
+                placeholder="不限"
+                onChange={(e) =>
+                  setQuotaDraft((prev) => ({
+                    ...prev,
+                    [s.id]: e.target.value.replace(/\D/g, '').slice(0, 2),
+                  }))
+                }
+                className="h-9 w-14 rounded-lg border border-zinc-200 px-2 text-center text-sm outline-none placeholder:text-[11px] placeholder:text-zinc-300 focus:border-orange-300"
+                aria-label={`${s.name} 每天题量`}
+              />
+              <span className="w-4 text-xs text-zinc-400">道</span>
+            </li>
+          ))}
+        </ul>
+
+        <Button
+          size="sm"
+          block
+          className="mt-3"
+          onClick={async () => {
+            const next: Record<string, number> = {};
+            for (const [sid, raw] of Object.entries(quotaDraft)) {
+              if (raw === '') continue;
+              next[sid] = Math.min(99, Math.max(0, Number(raw)));
+            }
+            await setSetting('subjectGoals', next);
+            toast.show(
+              Object.keys(next).length ? '已保存每科题量' : '已清空，按到期全做',
+              'success'
+            );
+          }}
+        >
+          保存每科题量
+        </Button>
+
+        <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+          到期的题不够时，会自动从这一科「最快要到期」的题里补齐；超出的部分留到明天。
+          填 0 表示这一科今天不做。
+        </p>
+
+        <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3">
+          <span className="text-xs text-zinc-500">全部留空时的总目标</span>
           <input
             type="number"
             inputMode="numeric"
@@ -301,12 +374,11 @@ export default function SettingsPage() {
             max={200}
             value={goalInput}
             onChange={(e) => setGoalInput(e.target.value.replace(/\D/g, '').slice(0, 3))}
-            className="h-9 w-16 rounded-lg border border-zinc-200 px-2 text-center text-sm outline-none focus:border-orange-300"
+            className="ml-auto h-9 w-16 rounded-lg border border-zinc-200 px-2 text-center text-sm outline-none focus:border-orange-300"
           />
           <span className="text-sm text-zinc-500">题</span>
           <Button
             size="sm"
-            className="ml-auto"
             onClick={async () => {
               const n = Math.min(200, Math.max(1, Number(goalInput) || 20));
               await setSetting('dailyGoal', n);
@@ -317,9 +389,6 @@ export default function SettingsPage() {
             保存
           </Button>
         </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
-          首页会显示今日进度环。目标只做提醒，不会改变复习排期。
-        </p>
       </Section>
 
       <Section title="分类">
@@ -385,11 +454,11 @@ export default function SettingsPage() {
 
       <Section title="关于">
         <div className="space-y-1.5 text-xs leading-relaxed text-zinc-500">
-          <p>错题簿 v0.2.0 · 本地优先的考研错题复习工具</p>
+          <p>错题簿 v0.3.0 · 本地优先的考研错题复习工具</p>
           <p>排期算法：FSRS-5，目标保留率 90%</p>
           <p>学习日边界：每天 04:00（凌晨复习算前一天）</p>
           <p>备份加密：PBKDF2-SHA256（60 万次迭代）+ AES-256-GCM</p>
-          <p>当前版本：录入（拍照/相册/PDF）、手写批注、FSRS 复习、统计与加密备份。</p>
+          <p>当前版本：录入（拍照/相册/PDF）、手写批注、FSRS 复习、按科题量、套卷、统计与加密备份。</p>
         </div>
       </Section>
 

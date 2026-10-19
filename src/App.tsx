@@ -11,6 +11,7 @@ import CapturePage from './features/capture/CapturePage';
 import ReviewPage from './features/review/ReviewPage';
 import SettingsPage from './features/settings/SettingsPage';
 import StatsPage from './features/stats/StatsPage';
+import PaperPage from './features/paper/PaperPage';
 
 const NAV = [
   { to: '/', label: '今日', icon: CalendarDays },
@@ -126,6 +127,7 @@ export default function App() {
             <Route path="/problem/:id" element={<ProblemPage />} />
             <Route path="/capture" element={<CapturePage />} />
             <Route path="/stats" element={<StatsPage />} />
+            <Route path="/paper" element={<PaperPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route path="/review" element={<ReviewPage />} />
