@@ -27,18 +27,24 @@
 
 ## 部署到 GitHub Pages（推荐）
 
-部署后是 HTTPS，用户可以像 App 一样安装，并且能用 Service Worker 离线打开。
+**当前线上地址：https://iroqiuli.github.io/mistake-notebook/**
+（仓库：[IroQiuli/mistake-notebook](https://github.com/IroQiuli/mistake-notebook)）
+
+部署后是 HTTPS，可以像 App 一样安装，并且能用 Service Worker 离线打开。
 
 ```bash
-git remote add origin https://github.com/<用户名>/cuotiben.git
+git remote add origin git@github.com:<用户名>/<仓库名>.git
 git push -u origin main
 ```
 
-不需要手动去 Settings 开 Pages：`.github/workflows/deploy.yml` 第一次运行时会用
-`actions/configure-pages` 自动把 Pages 打开（Source = GitHub Actions），并在构建时注入
-`VITE_BASE=/<仓库名>/`，保证静态资源挂在子路径下也能正确加载。
+首次部署只要在仓库里点一次 **Settings → Pages → Source 选「GitHub Actions」**。
+这一步没法由工作流代劳：GITHUB_TOKEN 没有创建 Pages 站点的管理员权限
+（会报 `Resource not accessible by integration`），所以脚本里不做自动开启。
 
-- 地址：`https://<用户名>.github.io/cuotiben/`
+之后每次推 `main`，`.github/workflows/deploy.yml` 会自动跑
+`npm ci → npm test → npm run build → deploy-pages`，并注入
+`VITE_BASE=/<仓库名>/`，保证静态资源挂在子路径下能正确加载。
+
 - 手机：Chrome 菜单 →「安装应用 / 添加到主屏幕」；iPhone 必须用 Safari →「共享」→「添加到主屏幕」
 - 仓库要设为 **public**（免费账号的 Pages 只对公开仓库开放）
 
