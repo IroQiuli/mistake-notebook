@@ -7,19 +7,20 @@ const T0 = new Date('2026-10-19T20:00:00').getTime();
 const DAY = 24 * 3600 * 1000;
 
 const problem = (over: Partial<Problem> & { id: string }): Problem =>
-  ({
-    id: over.id,
-    subjectId: 's1',
-    chapterId: 'c1',
-    topicIds: [],
-    stemAssetId: 'a1',
-    answerAssetIds: [],
-    wrongNote: '',
-    difficulty: 3,
-    createdAt: T0,
-    updatedAt: T0,
-    ...over,
-  }) as Problem;
+  Object.assign(
+    {
+      subjectId: 's1',
+      chapterId: 'c1',
+      topicIds: [],
+      stemAssetId: 'a1',
+      answerAssetIds: [],
+      wrongNote: '',
+      difficulty: 3,
+      createdAt: T0,
+      updatedAt: T0,
+    },
+    over
+  ) as Problem;
 
 const card = (id: string, due: number, state = 0): Card => ({
   ...newCard(T0, id),

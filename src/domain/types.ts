@@ -49,6 +49,8 @@ export interface Problem {
   topicIds: ID[];
 
   stemAssetId: ID;
+  /** 列表用缩略图，缺省时回退到 stemAssetId */
+  thumbAssetId?: ID;
   answerAssetIds: ID[];
   stemInkId?: ID;
   wrongNote: string;
@@ -97,7 +99,8 @@ export interface Asset {
   id: ID;
   kind: AssetKind;
   sourceAssetId?: ID;
-  blob: Blob;
+  /** 图片二进制。用 ArrayBuffer 而不是 Blob：IndexedDB 原生支持，跨环境一致 */
+  data: ArrayBuffer;
   width: number;
   height: number;
   mime: string;

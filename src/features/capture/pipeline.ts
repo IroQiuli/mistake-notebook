@@ -59,7 +59,7 @@ export async function decodeImage(file: Blob): Promise<ImageBitmap> {
 }
 
 export function drawToCanvas(
-  src: ImageBitmap,
+  src: CanvasImageSource,
   sx: number,
   sy: number,
   sw: number,
@@ -105,7 +105,10 @@ export function canvasToBlob(
   });
 }
 
-export async function makeThumb(blob: Blob, maxEdge = 400): Promise<Blob> {
+export async function makeThumb(
+  blob: Blob,
+  maxEdge = 400
+): Promise<{ blob: Blob; width: number; height: number }> {
   const bmp = await decodeImage(blob);
   const { width, height } = fitWithin(bmp.width, bmp.height, maxEdge);
   const canvas = document.createElement('canvas');
@@ -114,7 +117,7 @@ export async function makeThumb(blob: Blob, maxEdge = 400): Promise<Blob> {
   canvas.getContext('2d')!.drawImage(bmp, 0, 0, width, height);
   const out = await canvasToBlob(canvas, 'image/jpeg', 0.8);
   bmp.close();
-  return out;
+  return { blob: out, width, height };
 }
 
 /** 把整张图按长边限制缩小，返回画布（用于框选前的预处理） */

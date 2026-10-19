@@ -3,6 +3,20 @@ import type { Asset, AssetKind } from '../domain/types';
 
 const urlCache = new Map<string, string>();
 
+export function blobToBuffer(blob: Blob): Promise<ArrayBuffer> {
+  if (typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error ?? new Error('读取图片失败'));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+export function assetToBlob(asset: Pick<Asset, 'data' | 'mime'>): Blob {
+  return new Blob([asset.data], { type: asset.mime });
+}
+
 export async function putAsset(
   blob: Blob,
   kind: AssetKind,
@@ -10,15 +24,16 @@ export async function putAsset(
   sourceAssetId?: string
 ): Promise<string> {
   const id = crypto.randomUUID();
+  const data = await blobToBuffer(blob);
   await db.assets.add({
     id,
     kind,
     sourceAssetId,
-    blob,
+    data,
     width: size.width,
     height: size.height,
     mime: blob.type || 'image/jpeg',
-    bytes: blob.size,
+    bytes: data.byteLength,
     createdAt: Date.now(),
   });
   return id;
@@ -31,9 +46,9 @@ export async function getAsset(id: string): Promise<Asset | undefined> {
 export async function getUrl(id: string): Promise<string | null> {
   const hit = urlCache.get(id);
   if (hit) return hit;
-  const a = await db.assets.get(id);
-  if (!a) return null;
-  const url = URL.createObjectURL(a.blob);
+  const asset = await db.assets.get(id);
+  if (!asset) return null;
+  const url = URL.createObjectURL(assetToBlob(asset));
   urlCache.set(id, url);
   return url;
 }

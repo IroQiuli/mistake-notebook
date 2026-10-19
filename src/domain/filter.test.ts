@@ -5,19 +5,20 @@ import type { Chapter, Problem, Topic } from './types';
 const T0 = 1_700_000_000_000;
 
 const p = (over: Partial<Problem> & { id: string }): Problem =>
-  ({
-    id: over.id,
-    subjectId: 's1',
-    chapterId: 'c1',
-    topicIds: [],
-    stemAssetId: 'a1',
-    answerAssetIds: [],
-    wrongNote: '',
-    difficulty: 3,
-    createdAt: T0,
-    updatedAt: T0,
-    ...over,
-  }) as Problem;
+  Object.assign(
+    {
+      subjectId: 's1',
+      chapterId: 'c1',
+      topicIds: [],
+      stemAssetId: 'a1',
+      answerAssetIds: [],
+      wrongNote: '',
+      difficulty: 3,
+      createdAt: T0,
+      updatedAt: T0,
+    },
+    over
+  ) as Problem;
 
 const chapters: Chapter[] = [
   { id: 'c1', subjectId: 's1', name: '根轨迹分析法', order: 1 },
