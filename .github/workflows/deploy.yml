@@ -19,13 +19,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - run: npm ci
+
       - run: npm test
+
+      # 首次运行会自动把仓库的 Pages 打开（Source = GitHub Actions）
+      - id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
       - run: npm run build
+        env:
+          # 项目页地址是 https://<user>.github.io/<repo>/，资源必须按这个前缀打包
+          VITE_BASE: /${{ github.event.repository.name }}/
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

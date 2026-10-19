@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronDown, Download, HardDrive, Plus, Upload } from 'lucide-react';
+import { ChevronDown, Download, HardDrive, Lock, Plus, ShieldCheck, Upload } from 'lucide-react';
 import { db, getSetting, setSetting } from '../../storage/db';
+import { backupFilename, downloadBlob, exportBackup, importBackup } from '../../storage/backup';
 import {
-  backupFilename,
-  downloadBlob,
-  exportBackup,
-  importBackup,
-} from '../../storage/backup';
+  BackupCryptoError,
+  decryptBackup,
+  encryptBackup,
+  isEncryptedBackupFile,
+} from '../../storage/crypto';
+import { checkIntegrity, flagMissingAssets, type IntegrityReport } from '../../storage/integrity';
+import { persistenceState, requestPersistence, type PersistState } from '../../storage/persistence';
 import { collectOrphans, formatBytes, storageUsage } from '../../storage/assets';
 import { createChapter } from '../../storage/problems';
 import { formatDateTime } from '../../domain/time';
@@ -27,13 +30,27 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+const PERSIST_LABEL: Record<PersistState, string> = {
+  granted: '已持久化',
+  denied: '未持久化',
+  unsupported: '不支持',
+};
+
 export default function SettingsPage() {
   const toast = useToast();
   const importRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const [pendingImport, setPendingImport] = useState<File | null>(null);
+  const [pendingImport, setPendingImport] = useState<{ file: File; encrypted: boolean } | null>(null);
+  const [importPwd, setImportPwd] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportPwd, setExportPwd] = useState('');
+  const [exportPwd2, setExportPwd2] = useState('');
+  const [encryptOn, setEncryptOn] = useState(true);
   const [goalInput, setGoalInput] = useState('20');
   const [usage, setUsage] = useState<{ usage: number; quota: number }>({ usage: 0, quota: 0 });
+  const [persist, setPersist] = useState<PersistState>('unsupported');
+  const [report, setReport] = useState<IntegrityReport | null>(null);
+  const [checking, setChecking] = useState(false);
   const [openSubject, setOpenSubject] = useState<string | null>(null);
   const [newChapter, setNewChapter] = useState('');
 
@@ -45,6 +62,7 @@ export default function SettingsPage() {
 
   const refreshUsage = () => {
     storageUsage().then(setUsage).catch(() => {});
+    persistenceState().then(setPersist).catch(() => {});
   };
 
   useEffect(() => {
@@ -57,26 +75,57 @@ export default function SettingsPage() {
       .catch(() => {});
   }, []);
 
+  const openExport = () => {
+    setExportPwd('');
+    setExportPwd2('');
+    setEncryptOn(true);
+    setExportOpen(true);
+  };
+
   const doExport = async () => {
+    if (encryptOn) {
+      if (exportPwd.length < 6) {
+        toast.show('密码至少 6 位', 'error');
+        return;
+      }
+      if (exportPwd !== exportPwd2) {
+        toast.show('两次输入的密码不一致', 'error');
+        return;
+      }
+    }
     setBusy(true);
     try {
-      const blob = await exportBackup();
-      downloadBlob(blob, backupFilename());
-      toast.show('备份已生成，请保存到网盘', 'success');
+      const zip = await exportBackup();
+      const blob = encryptOn ? await encryptBackup(zip, exportPwd) : zip;
+      downloadBlob(blob, backupFilename(Date.now(), encryptOn));
+      toast.show(
+        encryptOn ? '加密备份已生成，请连同密码一起保存' : '备份已生成，请保存到网盘',
+        'success'
+      );
+      setExportOpen(false);
       refreshUsage();
     } catch (err) {
       console.error(err);
       toast.show('导出失败：' + (err instanceof Error ? err.message : '未知错误'), 'error');
-    } finally {
-      setBusy(false);
+    } finally {      setBusy(false);
     }
   };
 
   const doImport = async () => {
     if (!pendingImport) return;
+    const { file, encrypted } = pendingImport;
     setBusy(true);
     try {
-      const result = await importBackup(pendingImport);
+      let zip: Blob = file;
+      if (encrypted) {
+        if (!importPwd) {
+          toast.show('请输入备份密码', 'error');
+          setBusy(false);
+          return;
+        }
+        zip = await decryptBackup(file, importPwd);
+      }
+      const result = await importBackup(zip);
       toast.show(
         `导入完成：${result.problems} 道题、${result.assets} 张图${
           result.missingAssets ? `，${result.missingAssets} 张缺图` : ''
@@ -84,12 +133,28 @@ export default function SettingsPage() {
         'success'
       );
       setPendingImport(null);
+      setImportPwd('');
       refreshUsage();
+      setReport(null);
     } catch (err) {
-      console.error(err);
+      if (!(err instanceof BackupCryptoError)) console.error(err);
       toast.show('导入失败：' + (err instanceof Error ? err.message : '格式不对'), 'error');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const doCheck = async () => {
+    setChecking(true);
+    try {
+      const r = await checkIntegrity();
+      setReport(r);
+      if (!r.ok) {
+        const fixed = await flagMissingAssets();
+        if (fixed > 0) toast.show(`已标记 ${fixed} 道缺图题目`, 'info');
+      }
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -116,6 +181,29 @@ export default function SettingsPage() {
         </div>
 
         <div className="mt-3 flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2.5">
+          <span className="flex items-center gap-1.5 text-xs text-zinc-600">
+            <ShieldCheck size={14} className={persist === 'granted' ? 'text-emerald-500' : 'text-zinc-400'} />
+            存储状态：{PERSIST_LABEL[persist]}
+          </span>
+          {persist !== 'granted' && (
+            <button
+              type="button"
+              className="text-[11px] text-orange-600 underline-offset-2 active:opacity-60"
+              onClick={async () => {
+                const next = await requestPersistence();
+                setPersist(next);
+                toast.show(
+                  next === 'granted' ? '已申请持久化存储' : '浏览器暂未同意，多使用几天后再试',
+                  next === 'granted' ? 'success' : 'info'
+                );
+              }}
+            >
+              申请持久化
+            </button>
+          )}
+        </div>
+
+        <div className="mt-2 flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2.5">
           <span className="text-xs text-zinc-500">
             {lastBackupAt ? `上次备份：${formatDateTime(lastBackupAt)}` : '还没有备份过'}
           </span>
@@ -127,7 +215,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Button variant="primary" onClick={() => void doExport()} disabled={busy}>
+          <Button variant="primary" onClick={openExport} disabled={busy}>
             <Download size={16} />
             导出备份
           </Button>
@@ -140,30 +228,66 @@ export default function SettingsPage() {
         <input
           ref={importRef}
           type="file"
-          accept=".zip,application/zip"
+          accept=".zip,.ctbx,application/zip,application/octet-stream"
           className="hidden"
-          onChange={(e) => {
+          onChange={async (e) => {
             const file = e.target.files?.[0] ?? null;
             e.target.value = '';
-            if (file) setPendingImport(file);
+            if (!file) return;
+            const encrypted = await isEncryptedBackupFile(file).catch(() => false);
+            setImportPwd('');
+            setPendingImport({ file, encrypted });
           }}
         />
 
-        <button
-          type="button"
-          disabled={busy}
-          onClick={async () => {
-            const freed = await collectOrphans();
-            toast.show(freed > 0 ? `已清理 ${formatBytes(freed)}` : '没有可清理的图片', 'info');
-            refreshUsage();
-          }}
-          className="mt-3 text-xs text-zinc-400 underline-offset-2 hover:underline"
-        >
-          清理未被引用的图片
-        </button>
+        <div className="mt-3 flex items-center justify-between">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              const freed = await collectOrphans();
+              toast.show(freed > 0 ? `已清理 ${formatBytes(freed)}` : '没有可清理的图片', 'info');
+              refreshUsage();
+            }}
+            className="text-xs text-zinc-400 underline-offset-2 hover:underline"
+          >
+            清理未被引用的图片
+          </button>
+          <button
+            type="button"
+            onClick={() => void doCheck()}
+            disabled={checking}
+            className="text-xs text-zinc-400 underline-offset-2 hover:underline disabled:opacity-50"
+          >
+            {checking ? '检查中…' : '检查数据完整性'}
+          </button>
+        </div>
+
+        {report && (
+          <div
+            className={cn(
+              'mt-2 rounded-xl px-3 py-2.5 text-[11px] leading-relaxed',
+              report.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'
+            )}
+          >
+            {report.ok ? (
+              <>✓ 引用完整：{report.problems} 道题、{report.assets} 张图的引用都能对上</>
+            ) : (
+              <>
+                发现 {report.missingStem} 道题缺题干图、{report.missingAnswer} 处答案图缺失、
+                {report.orphanAssets} 张无引用图片、{report.orphanCards} 条孤立复习卡。
+                <br />
+                缺图多为导入不完整或清理过站点数据，可用备份重新导入修复。
+              </>
+            )}
+          </div>
+        )}
 
         <p className="mt-3 text-[11px] leading-relaxed text-zinc-400">
-          数据只保存在这台设备的浏览器里，换设备或清理浏览器数据都会丢失，请定期导出备份（建议放网盘）。
+          数据只保存在这台设备的浏览器里，换设备或清理浏览器数据都会丢失。
+          {persist === 'granted'
+            ? '浏览器已承诺不主动清理本站数据。'
+            : '建议申请持久化存储，并定期导出加密备份放网盘。'}
         </p>
       </Section>
 
@@ -201,7 +325,9 @@ export default function SettingsPage() {
       <Section title="分类">
         <div className="space-y-1">
           {subjects.map((s) => {
-            const list = chapters.filter((c) => c.subjectId === s.id).sort((a, b) => a.order - b.order);
+            const list = chapters
+              .filter((c) => c.subjectId === s.id)
+              .sort((a, b) => a.order - b.order);
             const open = openSubject === s.id;
             return (
               <div key={s.id}>
@@ -216,7 +342,10 @@ export default function SettingsPage() {
                   </span>
                   <span className="flex items-center gap-2 text-xs text-zinc-400">
                     {list.length} 章
-                    <ChevronDown size={14} className={cn('transition-transform', open && 'rotate-180')} />
+                    <ChevronDown
+                      size={14}
+                      className={cn('transition-transform', open && 'rotate-180')}
+                    />
                   </span>
                 </button>
                 {open && (
@@ -256,24 +385,89 @@ export default function SettingsPage() {
 
       <Section title="关于">
         <div className="space-y-1.5 text-xs leading-relaxed text-zinc-500">
-          <p>错题簿 v0.1.0 · 本地优先的考研错题复习工具</p>
+          <p>错题簿 v0.2.0 · 本地优先的考研错题复习工具</p>
           <p>排期算法：FSRS-5，目标保留率 90%</p>
           <p>学习日边界：每天 04:00（凌晨复习算前一天）</p>
-          <p>当前版本：录入（拍照/相册/PDF）、手写批注、FSRS 复习、统计与备份。</p>
+          <p>备份加密：PBKDF2-SHA256（60 万次迭代）+ AES-256-GCM</p>
+          <p>当前版本：录入（拍照/相册/PDF）、手写批注、FSRS 复习、统计与加密备份。</p>
         </div>
       </Section>
+
+      <Dialog open={exportOpen} onClose={() => setExportOpen(false)} title="导出备份" size="sm">
+        <label className="flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2.5">
+          <span className="flex items-center gap-2 text-sm text-zinc-700">
+            <Lock size={15} className="text-zinc-400" />
+            用密码加密（推荐）
+          </span>
+          <input
+            type="checkbox"
+            checked={encryptOn}
+            onChange={(e) => setEncryptOn(e.target.checked)}
+            className="h-5 w-5 accent-orange-500"
+          />
+        </label>
+
+        {encryptOn ? (
+          <div className="mt-3 space-y-2">
+            <input
+              type="password"
+              value={exportPwd}
+              onChange={(e) => setExportPwd(e.target.value)}
+              placeholder="设置密码（至少 6 位）"
+              className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:border-orange-300"
+            />
+            <input
+              type="password"
+              value={exportPwd2}
+              onChange={(e) => setExportPwd2(e.target.value)}
+              placeholder="再输一次"
+              className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:border-orange-300"
+            />
+            <p className="text-[11px] leading-relaxed text-amber-700">
+              密码不会保存在任何地方。忘记密码 = 备份无法恢复，请记在密码管理器里。
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-[11px] leading-relaxed text-amber-700">
+            不加密的备份是公开的压缩包，谁拿到都能看图。只建议临时在同设备间搬运。
+          </p>
+        )}
+
+        <div className="mt-5 flex gap-3">
+          <Button block onClick={() => setExportOpen(false)} disabled={busy}>
+            取消
+          </Button>
+          <Button variant="primary" block onClick={() => void doExport()} disabled={busy}>
+            {busy ? '生成中…' : '生成备份'}
+          </Button>
+        </div>
+      </Dialog>
 
       <Dialog
         open={pendingImport !== null}
         onClose={() => setPendingImport(null)}
-        title="确认导入？"
+        title="导入备份"
         size="sm"
       >
         <p className="text-sm leading-relaxed text-zinc-600">
-          将导入 <b>{pendingImport?.name}</b>。
-          <br />
-          同 id 的题目会以备份内容为准，设备上其他题目不会被删除。
+          {pendingImport?.encrypted ? '这是一个加密备份，请输入导出时设置的密码。' : '将导入'}{' '}
+          <b className="break-all">{pendingImport?.file.name}</b>
         </p>
+
+        {pendingImport?.encrypted && (
+          <input
+            type="password"
+            value={importPwd}
+            onChange={(e) => setImportPwd(e.target.value)}
+            placeholder="备份密码"
+            className="mt-3 h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:border-orange-300"
+          />
+        )}
+
+        <p className="mt-3 text-[11px] leading-relaxed text-zinc-400">
+          同 id 的题目以备份内容为准，设备上其他题目不会被删除。
+        </p>
+
         <div className="mt-5 flex gap-3">
           <Button block onClick={() => setPendingImport(null)} disabled={busy}>
             取消

@@ -4,7 +4,8 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  base: './',
+  // 本地开发用相对路径；GitHub Pages 部署时由工作流传入 VITE_BASE=/<repo>/
+  base: process.env.VITE_BASE ?? './',
   plugins: [
     react(),
     tailwindcss(),
@@ -15,6 +16,7 @@ export default defineConfig({
         name: '错题簿',
         short_name: '错题簿',
         description: '考研错题收集与间隔复习',
+        lang: 'zh-CN',
         theme_color: '#f97316',
         background_color: '#ffffff',
         display: 'standalone',

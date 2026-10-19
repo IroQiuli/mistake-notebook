@@ -9,7 +9,7 @@
 - 首页：今日队列 + 今日目标进度环 + 接下来 1/3/7 天各有多少题到期
 - 改期：3 / 7 / 14 / 30 天，或自定义任意天数
 - 分类：科目 → 章节 → 知识点标签；「真题」单独成一支，可按年份筛选
-- 备份：一键导出 zip（含图片），换设备时导入恢复
+- 备份：一键导出**加密**备份（AES-256-GCM），换设备时导入恢复；带存储持久化状态与数据完整性自检
 
 ## 截图
 
@@ -21,16 +21,42 @@
 | --- | --- | --- |
 | ![统计](docs/screenshots/stats.png) | ![正确率](docs/screenshots/accuracy.png) | ![PDF](docs/screenshots/pdf-picker.png) |
 
-| 错题本 | 真题筛选 | 桌面宽屏 |
+| 错题本 | 真题筛选 | 加密备份 |
 | --- | --- | --- |
-| ![错题本](docs/screenshots/library.png) | ![真题筛选](docs/screenshots/real-filter.png) | ![桌面](docs/screenshots/desktop.png) |
+| ![错题本](docs/screenshots/library.png) | ![真题筛选](docs/screenshots/real-filter.png) | ![加密备份](docs/screenshots/settings-backup.png) |
+
+## 部署到 GitHub Pages（推荐）
+
+部署后是 HTTPS，用户可以像 App 一样安装，并且能用 Service Worker 离线打开。
+
+```bash
+git remote add origin https://github.com/<用户名>/cuotiben.git
+git push -u origin main
+```
+
+不需要手动去 Settings 开 Pages：`.github/workflows/deploy.yml` 第一次运行时会用
+`actions/configure-pages` 自动把 Pages 打开（Source = GitHub Actions），并在构建时注入
+`VITE_BASE=/<仓库名>/`，保证静态资源挂在子路径下也能正确加载。
+
+- 地址：`https://<用户名>.github.io/cuotiben/`
+- 手机：Chrome 菜单 →「安装应用 / 添加到主屏幕」；iPhone 必须用 Safari →「共享」→「添加到主屏幕」
+- 仓库要设为 **public**（免费账号的 Pages 只对公开仓库开放）
+
+其他平台同理，构建产物是纯静态文件、路由用 Hash 模式：
+
+| 平台 | 构建命令 | 输出目录 |
+| --- | --- | --- |
+| Cloudflare Pages / Netlify | `npm run build` | `dist` |
+
+> 换域名等于换数据库：浏览器的 IndexedDB 绑定在域名上。迁移只能用「导出加密备份 → 新域名导入」。
+> 从局域网 `http://192.168.x.x` 迁到 `https://…github.io` 也要走这一步。
 
 ## 本地开发
 
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm test             # 领域逻辑单测（Vitest）
+npm test             # 单测（Vitest）
 npm run build        # 产出 dist/
 npm run preview      # 预览构建结果
 ```
@@ -38,46 +64,67 @@ npm run preview      # 预览构建结果
 冒烟测试（用本机 Edge，不需要下载 Chromium）：
 
 ```bash
-npm run dev -- --port 5199
-node scripts/e2e-smoke.mjs   # 录题→复习→手写→批注→草稿，截图输出到 .cache/shots/
-node scripts/e2e-pdf.mjs     # 用 ../考研资料/自控 里的真题 PDF 跑一遍截题
+npm run preview -- --port 5199
+node scripts/e2e-smoke.mjs    # 录题→复习→手写→批注→统计
+node scripts/e2e-stats.mjs    # 灌演示数据并截统计页
+node scripts/e2e-pdf.mjs      # 用 ../考研资料/自控 里的真题 PDF 跑一遍截题
+node scripts/e2e-backup.mjs   # 加密导出 → 全新浏览器配置导入还原
 ```
 
-## 部署
+## 数据是怎么保存的
 
-构建产物是纯静态文件，`base` 已设为相对路径、路由用 Hash 模式，可以放在任意子目录。
+**存储结构**：浏览器 IndexedDB（库名 `cuotiben`，Dexie 管理），10 张表：
 
-**GitHub Pages**
+| 表 | 内容 |
+| --- | --- |
+| `subjects` / `chapters` / `topics` | 分类树（科目 → 章节 → 知识点） |
+| `problems` | 错题：题干图 id、答案图 id、错因标签、来源、难度、备注 |
+| `cards` | FSRS 卡片：稳定度、难度、到期时间、复习次数 |
+| `reviewLogs` | 每次评分记录（用于热力图、正确率、留存率） |
+| `assets` | 图片二进制，以 `ArrayBuffer` 存（不是 Blob，避免结构化克隆问题） |
+| `inks` | 手写笔迹，坐标按图片宽度归一化，换设备分辨率也能对齐 |
+| `settings` | 每日目标、上次备份时间等 |
 
-1. 新建仓库并推送本目录。
-2. Settings → Pages → Source 选 `GitHub Actions`。
-3. 推送到 `main` 后，`.github/workflows/deploy.yml` 会自动构建并发布。
-4. 用 `https://<用户名>.github.io/<仓库名>/` 打开，手机上「添加到主屏幕」。
+**安全保存方案**（按风险逐条对应）：
 
-**Cloudflare Pages**
+| 风险 | 应对 | 实现 |
+| --- | --- | --- |
+| 浏览器自动清理站点数据 | 申请持久化存储；「我的」显示已/未持久化，可手动再申请 | `navigator.storage.persist()` / `persisted()` |
+| 手机丢失、换设备 | 导出加密备份，新设备导入还原 | `exportBackup()` + `importBackup()` |
+| 备份文件被网盘/他人看到 | 口令加密：PBKDF2-SHA256 60 万次迭代派生密钥，AES-256-GCM 加密，头部作为 AAD 参与认证 | `src/storage/crypto.ts` |
+| 备份被篡改 | GCM 认证标签，改动任意一位都会解密失败并提示「密码不对或文件已损坏」 | 同上 |
+| 忘记密码 | 无后门、无托管：明确提示「忘记密码 = 无法恢复」，建议记进密码管理器 | 导出弹窗 |
+| 导入不完整 / 数据被劫持一半 | 自检：统计缺题干图、缺答案图、无引用图片、孤立卡片，可一键清理 | `src/storage/integrity.ts` |
+| 误删、误导入 | 导入按 id 合并，同 id 以备份为准，不删除本机其它题目 | `importBackup()` |
+| 忘记备份 | 首页超过 7 天显示提醒 | 今日页横幅 |
 
-- 构建命令：`npm run build`
-- 输出目录：`dist`
-- 框架预设：无（或 Vite）
+**备份包格式**
 
-> 换域名等于换数据库：浏览器的 IndexedDB 绑定在域名上。迁移只能用「导出备份 → 新域名导入」。
+```
+cuotiben-backup-20261019.ctbx        # 加密包
+  CTBX | 版本(1) | salt(16) | iv(12) | AES-256-GCM 密文
+        └─ 解密后是 zip ─────────────┐
+cuotiben-backup-20261019.zip         # 不加密（仅临时搬运）
+  manifest.json   格式版本、导出时间、各类数量
+  data.json       除图片外的全部表
+  assets/*.bin    图片原始字节
+```
 
-## 数据说明
+密码不写入文件、不上传服务器、不存 localStorage：只在内存里参与密钥派生。
 
-- 所有数据（题目、图片、笔迹、复习记录）只存在浏览器的 IndexedDB 里，不上传任何服务器。
-- 启动时会请求 `navigator.storage.persist()`，降低被浏览器自动清理的概率；iOS 上仍可能回收长期不用的站点数据。
-- 首页超过 7 天没备份会出现提醒。备份文件建议放网盘。
-- 图片按长边 2400px、JPEG 0.9 存储，1000 道题大约 300–500 MB。
+**没做云同步**，这是刻意的：多端同时改同一道题时，自动同步需要冲突合并策略和服务端，
+而"导出 → 导入（同 id 覆盖）"在单人使用时语义更可预期。代价是换设备要手动搬一次备份。
 
 ## 结构
 
 ```
 src/
   domain/     纯逻辑：类型、学习日、FSRS 排期、复习队列、检索筛选
-  storage/    Dexie schema、种子数据、图片 Blob、错题 CRUD、备份导入导出
-  features/   today / capture / library / problem / review / settings
+  storage/    Dexie schema、种子数据、图片、CRUD、加密备份、完整性自检
+  features/   today / capture / library / problem / review / stats / settings
   ui/         Button、Dialog、Toast、EmptyState、ZoomableImage
   hooks/      useAssetUrl
+.github/workflows/deploy.yml   GitHub Pages 构建与发布
 ```
 
 约定：`domain/` 不依赖 React 和存储层；`storage/` 不做业务判断；页面只做编排。
@@ -87,7 +134,8 @@ src/
 - [x] **M1 能录能复习**：录入（拍照/相册 + 框选 + 增强）、错题本、详情、FSRS 复习、备份
 - [x] **M2 能手写**：题干批注、复习作答层、钢笔/荧光笔/橡皮/撤销重做
 - [x] **M3 能导卷子**：PDF 翻页渲染 + 高分辨率截题（Word 导入待做）
-- [x] **M4 有反馈**：复习热力图、14 天到期预测、章节掌握度（深色模式与安装引导待做）
+- [x] **M4 有反馈**：复习热力图、14 天到期预测、章节掌握度、错因分布、每日目标
+- [x] **M5 可安装**：GitHub Pages 部署、加密备份、存储持久化、完整性自检
 
 设计文档见 `docs/superpowers/specs/2026-10-19-cuotiben-design.md`，
 实施计划见 `docs/superpowers/plans/2026-10-19-m1-capture-review.md`。
@@ -96,8 +144,8 @@ src/
 
 1. 无 OCR：搜索只覆盖文字字段（错误原因、来源、章节、标签）。
 2. Word（.docx）导入还没做，需要的话先另存为 PDF 再导入。
-3. iOS PWA 的存储可能被系统回收，备份是必需操作。
+3. iOS PWA 的存储仍可能被系统回收，加密备份是必需操作。
 4. 通知提醒在 iOS PWA 上不可靠，以首页角标为主。
 5. 换浏览器 / 换域名 = 换数据库，迁移只能靠备份包。
 6. 手写层按图片宽度铺满显示，暂不支持在批注模式下双指缩放（可用「放大看」看原图）。
-7. 用局域网 `http://192.168.x.x` 访问时不是安全上下文，浏览器不提供 `crypto.randomUUID`、Service Worker、存储持久化——代码里已做 UUID 降级，但**离线缓存与安装只能靠 HTTPS 部署**。
+7. 备份是"手动 + 提醒"，没有自动定时备份：浏览器不允许网页在没打开时写文件。

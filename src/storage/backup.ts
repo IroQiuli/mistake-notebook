@@ -14,7 +14,7 @@ import type {
 } from '../domain/types';
 
 const FORMAT = 1;
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.2.0';
 
 interface BackupData {
   subjects: Subject[];
@@ -195,8 +195,9 @@ export function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function backupFilename(now = Date.now()): string {
+export function backupFilename(now = Date.now(), encrypted = false): string {
   const d = new Date(now);
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `cuotiben-backup-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.zip`;
+  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+  return `cuotiben-backup-${stamp}.${encrypted ? 'ctbx' : 'zip'}`;
 }
