@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, Search, SlidersHorizontal } from 'lucide-react';
 import { db } from '../../storage/db';
@@ -14,16 +14,29 @@ import { FilterBar } from './FilterBar';
 
 export default function LibraryPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const problems = useLiveQuery(() => db.problems.toArray(), [], []);
   const chapters = useLiveQuery(() => db.chapters.toArray(), [], []);
   const topics = useLiveQuery(() => db.topics.toArray(), [], []);
   const cards = useLiveQuery(() => db.cards.toArray(), [], []);
   const subjects = useLiveQuery(() => db.subjects.orderBy('order').toArray(), [], []);
 
-  const [filter, setFilter] = useState<ProblemFilter>({});
-  const [subjectId, setSubjectId] = useState<string | undefined>(undefined);
+  // 支持从统计页点章节跳进来：?subject=xx&chapter=yy
+  const initialChapter = params.get('chapter');
+  const [filter, setFilter] = useState<ProblemFilter>(
+    initialChapter ? { chapterIds: [initialChapter] } : {}
+  );
+  const [subjectId, setSubjectId] = useState<string | undefined>(
+    params.get('subject') ?? undefined
+  );
   const [keyword, setKeyword] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
+
+  const pickSubject = (id: string | undefined) => {
+    setSubjectId(id);
+    // 换科目时清掉上一科目的章节筛选，避免筛出空列表
+    setFilter((f) => ({ ...f, chapterIds: [] }));
+  };
 
   const now = Date.now();
   const cardMap = useMemo(() => new Map(cards.map((c) => [c.problemId, c])), [cards]);
@@ -111,7 +124,7 @@ export default function LibraryPage() {
       <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
         <button
           type="button"
-          onClick={() => setSubjectId(undefined)}
+          onClick={() => pickSubject(undefined)}
           className={cn(
             'shrink-0 rounded-full px-3 py-1.5 text-xs',
             !subjectId ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-600 ring-1 ring-zinc-200'
@@ -123,7 +136,7 @@ export default function LibraryPage() {
           <button
             key={s.id}
             type="button"
-            onClick={() => setSubjectId(s.id)}
+            onClick={() => pickSubject(s.id)}
             className={cn(
               'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs',
               subjectId === s.id
@@ -151,7 +164,7 @@ export default function LibraryPage() {
                   onClick={() => {
                     setFilter({});
                     setKeyword('');
-                    setSubjectId(undefined);
+                    pickSubject(undefined);
                   }}
                 >
                   清空筛选

@@ -5,6 +5,7 @@
 - 录题三步：拍照 / 相册 / PDF 翻页 → 拖框选出这道题 → 选科目和章节，保存。其余信息（知识点、难度、来源、错误原因）收在「更多信息」里，不挡路
 - 复习：每天自动列出到期的错题，四档自评后 FSRS-5 计算下次时间
 - 手写：平板上用触屏笔直接在题干上批注；复习时另起一层作答，不剧透上次的解法
+- 统计：16 周复习热力图、未来 14 天到期预测、各章节掌握度（按薄弱程度排序）
 - 分类：科目 → 章节 → 知识点标签，内置数学二 / 英语二 / 政治 / 839
 - 备份：一键导出 zip（含图片），换设备时导入恢复
 
@@ -14,9 +15,13 @@
 | --- | --- | --- |
 | ![今日](docs/screenshots/today.png) | ![复习手写](docs/screenshots/review-writing.png) | ![批注](docs/screenshots/problem-annotated.png) |
 
-| PDF 截题 | 筛选（科目树） | 错题本 |
+| 统计 | PDF 截题 | 筛选（科目树） |
 | --- | --- | --- |
-| ![PDF](docs/screenshots/pdf-picker.png) | ![筛选](docs/screenshots/filter-tree.png) | ![错题本](docs/screenshots/library.png) |
+| ![统计](docs/screenshots/stats.png) | ![PDF](docs/screenshots/pdf-picker.png) | ![筛选](docs/screenshots/filter-tree.png) |
+
+| 错题本 | 桌面宽屏 | |
+| --- | --- | --- |
+| ![错题本](docs/screenshots/library.png) | ![桌面](docs/screenshots/desktop.png) | |
 
 ## 本地开发
 
@@ -80,7 +85,7 @@ src/
 - [x] **M1 能录能复习**：录入（拍照/相册 + 框选 + 增强）、错题本、详情、FSRS 复习、备份
 - [x] **M2 能手写**：题干批注、复习作答层、钢笔/荧光笔/橡皮/撤销重做
 - [x] **M3 能导卷子**：PDF 翻页渲染 + 高分辨率截题（Word 导入待做）
-- [ ] **M4 有反馈**：统计热力图、到期预测、深色模式、安装引导
+- [x] **M4 有反馈**：复习热力图、14 天到期预测、章节掌握度（深色模式与安装引导待做）
 
 设计文档见 `docs/superpowers/specs/2026-10-19-cuotiben-design.md`，
 实施计划见 `docs/superpowers/plans/2026-10-19-m1-capture-review.md`。

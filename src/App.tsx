@@ -1,5 +1,5 @@
 import { HashRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import { CalendarDays, Layers, Plus, Settings } from 'lucide-react';
+import { BarChart3, CalendarDays, Layers, Plus, Settings } from 'lucide-react';
 import { useEffect } from 'react';
 import { ToastProvider } from './ui/Toast';
 import { cn } from './ui/cn';
@@ -10,11 +10,13 @@ import ProblemPage from './features/problem/ProblemPage';
 import CapturePage from './features/capture/CapturePage';
 import ReviewPage from './features/review/ReviewPage';
 import SettingsPage from './features/settings/SettingsPage';
+import StatsPage from './features/stats/StatsPage';
 
 const NAV = [
   { to: '/', label: '今日', icon: CalendarDays },
   { to: '/library', label: '错题本', icon: Layers },
   { to: '/capture', label: '录入', icon: Plus },
+  { to: '/stats', label: '统计', icon: BarChart3 },
   { to: '/settings', label: '我的', icon: Settings },
 ];
 
@@ -123,6 +125,7 @@ export default function App() {
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/problem/:id" element={<ProblemPage />} />
             <Route path="/capture" element={<CapturePage />} />
+            <Route path="/stats" element={<StatsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route path="/review" element={<ReviewPage />} />

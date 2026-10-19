@@ -103,3 +103,12 @@ export function previewIntervals(card: Card, now: number): Record<Rating, number
     4: scheduling[FsrsRating.Easy].card.due.getTime(),
   };
 }
+
+/** 当前时刻「还记得」的预测概率（0–1）。新题/没复习过返回 0 */
+export function retrievability(card: Card, now: number): number {
+  if (card.state === 0 || !card.lastReview) return 0;
+  const value = engine.get_retrievability(toFsrs(card), new Date(now), false);
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(1, Math.max(0, value))
+    : 0;
+}

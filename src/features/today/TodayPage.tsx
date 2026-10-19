@@ -5,24 +5,11 @@ import { ChevronRight, Flame, Plus } from 'lucide-react';
 import { db, getSetting } from '../../storage/db';
 import { buildQueue } from '../../domain/queue';
 import { dayKey, formatToday, learningDayStart } from '../../domain/time';
+import { calcStreak } from '../../domain/stats';
 import { useAssetUrl } from '../../hooks/useAssetUrl';
 import { Button } from '../../ui/Button';
 import { EmptyState } from '../../ui/EmptyState';
 import { cn } from '../../ui/cn';
-
-function useStreak(logs: { reviewedAt: number }[]): number {
-  return useMemo(() => {
-    const keys = new Set(logs.map((l) => dayKey(l.reviewedAt)));
-    let streak = 0;
-    let cursor = Date.now();
-    if (!keys.has(dayKey(cursor))) cursor -= 24 * 3600 * 1000;
-    while (keys.has(dayKey(cursor))) {
-      streak++;
-      cursor -= 24 * 3600 * 1000;
-    }
-    return streak;
-  }, [logs]);
-}
 
 function RecentItem({ id }: { id: string }) {
   const problem = useLiveQuery(() => db.problems.get(id), [id]);
@@ -68,7 +55,7 @@ export default function TodayPage() {
 
   const now = Date.now();
   const queue = useMemo(() => buildQueue(problems, cards, { now }), [problems, cards, now]);
-  const streak = useStreak(logs);
+  const streak = calcStreak(logs, now);
 
   const perSubject = useMemo(() => {
     const map = new Map<string, number>();

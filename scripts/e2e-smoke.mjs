@@ -148,7 +148,7 @@ await page.goto(BASE + '/#/library');
 await page.waitForTimeout(700);
 await shot('13-library-desktop.png');
 
-// 9. 筛选面板（科目树）
+// 9. 筛选面板（科目树，桌面）
 await page.getByRole('button', { name: /筛选/ }).click();
 await page.waitForTimeout(500);
 const filterDialog = page.getByRole('dialog');
@@ -156,6 +156,13 @@ await filterDialog.getByRole('button', { name: /839/ }).click();
 await page.waitForTimeout(400);
 await shot('17-filter-tree.png');
 await page.keyboard.press('Escape');
+
+// 10. 统计（手机）
+await page.setViewportSize({ width: 390, height: 844 });
+await page.goto(BASE + '/#/stats');
+await page.waitForTimeout(1200);
+await shot('18-stats.png');
+console.log('stats heat cells:', await page.locator('div[title*="次"]').count());
 
 console.log('shots:', shots.length);
 console.log('errors:', JSON.stringify(errors, null, 2));
