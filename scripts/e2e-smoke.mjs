@@ -96,6 +96,27 @@ await page.getByRole('button', { name: /保存并加入复习/ }).click();
 await page.waitForSelector('text=已保存，明天起会自动排期复习', { timeout: 15000 });
 await shot('06-done.png');
 
+// 新题按掌握程度排到 1~14 天后，这里把卡片提前到今天再测复习流
+await page.evaluate(async () => {
+  const db = await new Promise((res, rej) => {
+    const req = indexedDB.open('cuotiben');
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+  const now = Date.now();
+  await new Promise((res, rej) => {
+    const tx = db.transaction('cards', 'readwrite');
+    const store = tx.objectStore('cards');
+    const all = store.getAll();
+    all.onsuccess = () => {
+      for (const c of all.result) store.put({ ...c, due: now });
+    };
+    tx.oncomplete = res;
+    tx.onerror = () => rej(tx.error);
+  });
+  db.close();
+});
+
 // 3. 今日（有数据）
 await page.goto(BASE + '/#/');
 await page.waitForTimeout(800);
@@ -111,10 +132,6 @@ await shot('08-library.png');
 await page.goto(BASE + '/#/review');
 await page.waitForTimeout(1000);
 await shot('09-review.png', false);
-await page.getByRole('button', { name: /开启手写/ }).click();
-await page.waitForTimeout(300);
-await drawStroke();
-await page.waitForTimeout(900);
 await shot('09b-review-written.png', false);
 await page.getByRole('button', { name: '看答案' }).click();
 await page.waitForTimeout(500);
@@ -123,23 +140,15 @@ await page.getByRole('button', { name: /记得/ }).click();
 await page.waitForSelector('text=这一轮复习完了', { timeout: 15000 });
 await page.waitForTimeout(900);
 await shot('11-review-done.png');
-console.log('inks after review:', JSON.stringify(await readInks()));
 
-// 6. 详情页批注
-await page.goto(BASE + '/#/library');
+// 6. 详情页（错题本已折叠，改从检索页进）
+await page.goto(BASE + '/#/search');
 await page.waitForTimeout(700);
 await page.locator('a[href*="/problem/"]').first().click();
 await page.waitForTimeout(900);
-await page.getByRole('button', { name: '批注' }).click();
-await page.waitForTimeout(700);
-await page.getByRole('button', { name: /开启手写/ }).click();
-await page.waitForTimeout(300);
-await drawStroke();
-await page.waitForTimeout(300);
-await page.getByRole('button', { name: '完成' }).click();
+
 await page.waitForTimeout(900);
 await shot('14-problem-annotated.png');
-console.log('inks after annotation:', JSON.stringify(await readInks()));
 
 // 6. 详情页：答案默认隐藏 + 点击放大 + 自定义改期
 await page.locator('input[type=file]').last().setInputFiles('scripts/fixture-question.png');
@@ -173,8 +182,10 @@ await page.goto(BASE + '/#/library');
 await page.waitForTimeout(700);
 await shot('13-library-desktop.png');
 
-// 9. 筛选面板（科目树，桌面）
-await page.getByRole('button', { name: /筛选/ }).click();
+// 9. 筛选面板（科目树，桌面）—— 错题本已折叠，筛选在检索页
+await page.goto(BASE + '/#/search');
+await page.waitForTimeout(700);
+await page.getByRole('button', { name: '筛选', exact: true }).click();
 await page.waitForTimeout(500);
 const filterDialog = page.getByRole('dialog');
 await filterDialog.getByRole('button', { name: /839/ }).click();

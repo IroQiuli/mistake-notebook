@@ -1,11 +1,15 @@
 import { HashRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { BarChart3, CalendarDays, Layers, Plus, Settings } from 'lucide-react';
 import { useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { getSetting } from './storage/db';
 import { ToastProvider } from './ui/Toast';
 import { cn } from './ui/cn';
 import { ensureSeeded } from './storage/seed';
 import TodayPage from './features/today/TodayPage';
 import LibraryPage from './features/library/LibraryPage';
+import SearchPage from './features/library/SearchPage';
+import ChapterPage from './features/library/ChapterPage';
 import ProblemPage from './features/problem/ProblemPage';
 import CapturePage from './features/capture/CapturePage';
 import ReviewPage from './features/review/ReviewPage';
@@ -31,10 +35,24 @@ function ScrollToTop() {
 
 function Shell() {
   const location = useLocation();
-  const isImmersive = location.pathname.startsWith('/review');
+  const isImmersive =
+    location.pathname.startsWith('/review') || location.pathname.startsWith('/chapter');
+  const wallpaper = useLiveQuery(() => getSetting<string>('wallpaper', ''), [], '');
 
   return (
-    <div className="min-h-full bg-zinc-50 md:flex">
+    <div
+      className="min-h-full bg-zinc-50 md:flex"
+      style={
+        wallpaper
+          ? {
+              backgroundImage: `url(${wallpaper})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundAttachment: 'fixed',
+            }
+          : undefined
+      }
+    >
       <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-zinc-200 bg-white px-3 py-5 md:flex">
         <div className="mb-6 flex items-center gap-2 px-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-sm font-bold text-white">
@@ -124,6 +142,8 @@ export default function App() {
           <Route element={<Shell />}>
             <Route path="/" element={<TodayPage />} />
             <Route path="/library" element={<LibraryPage />} />
+            <Route path="/search" element={<SearchPage />} />
+            <Route path="/chapter/:id" element={<ChapterPage />} />
             <Route path="/problem/:id" element={<ProblemPage />} />
             <Route path="/capture" element={<CapturePage />} />
             <Route path="/stats" element={<StatsPage />} />

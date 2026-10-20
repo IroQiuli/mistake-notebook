@@ -822,9 +822,7 @@ export default function StatsPage() {
               <li key={m.chapterId} className="flex items-start gap-2">
                 <button
                   type="button"
-                  onClick={() =>
-                    navigate(`/library?subject=${m.subjectId}&chapter=${m.chapterId}`)
-                  }
+                  onClick={() => navigate(`/chapter/${m.chapterId}`)}
                   className="min-w-0 flex-1 text-left"
                 >
                   <div className="flex items-baseline justify-between gap-2">

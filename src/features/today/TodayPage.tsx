@@ -93,13 +93,16 @@ export default function TodayPage() {
   const streak = calcStreak(logs, now);
   const problemMap = useMemo(() => new Map(problems.map((p) => [p.id, p])), [problems]);
 
-  /** 今天每个科目已经写了几道 */
+  /** 今天每个科目写了几道（同一题多次只算一次） */
   const reviewedBySubject = useMemo(() => {
     const map = new Map<string, number>();
+    const seen = new Set<string>();
     const today = dayKey(now);
     for (const l of logs) {
       if (l.rating === 0) continue;
       if (dayKey(l.reviewedAt) !== today) continue;
+      if (seen.has(l.problemId)) continue;
+      seen.add(l.problemId);
       const p = problemMap.get(l.problemId);
       if (!p) continue;
       map.set(p.subjectId, (map.get(p.subjectId) ?? 0) + 1);
@@ -107,12 +110,26 @@ export default function TodayPage() {
     return map;
   }, [logs, problemMap, now]);
 
-  const todayReviewed = logs.filter(
-    (l) => l.rating !== 0 && dayKey(l.reviewedAt) === dayKey(now)
-  ).length;
-  const weekReviewed = logs.filter(
-    (l) => l.rating !== 0 && l.reviewedAt >= now - 7 * 24 * 3600 * 1000
-  ).length;
+  /** 今日已写：按题目去重，一天内重复做同一题不重复计数 */
+  const todayReviewed = useMemo(() => {
+    const today = dayKey(now);
+    const seen = new Set<string>();
+    for (const l of logs) {
+      if (l.rating === 0 || dayKey(l.reviewedAt) !== today) continue;
+      seen.add(l.problemId);
+    }
+    return seen.size;
+  }, [logs, now]);
+
+  const weekReviewed = useMemo(() => {
+    const seen = new Set<string>();
+    for (const l of logs) {
+      if (l.rating === 0 || l.reviewedAt < now - 7 * 24 * 3600 * 1000) continue;
+      seen.add(l.problemId);
+    }
+    return seen.size;
+  }, [logs, now]);
+
   const activeCount = problems.filter((p) => !p.archivedAt).length;
 
   /** 今天到期（含逾期）的总数，用来提示「还有多少顺延到明天」 */
@@ -245,7 +262,13 @@ export default function TodayPage() {
               const goal = quotas[s.id] ?? 0;
               const pct = Math.min(1, done / Math.max(1, goal));
               return (
-                <div key={s.id} className="flex items-center gap-2">
+                <button
+                  key={s.id}
+                  type="button"
+                  data-testid={`subject-entry-${s.id}`}
+                  onClick={() => navigate(`/review?subject=${s.id}`)}
+                  className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left active:bg-zinc-100"
+                >
                   <span
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
                     style={{ backgroundColor: s.color }}
@@ -270,7 +293,7 @@ export default function TodayPage() {
                   >
                     {done}/{goal}
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>

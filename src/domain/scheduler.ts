@@ -7,6 +7,9 @@ import {
   type Grade,
 } from 'ts-fsrs';
 import type { Card, CardState, Rating } from './types';
+import { intervalFactor } from './weight';
+
+const DAY = 24 * 3600 * 1000;
 
 /** 目标保留率 90%，关闭随机抖动以保证同一操作得到确定结果 */
 const engine = fsrs({ request_retention: 0.9, enable_fuzz: false });
@@ -88,20 +91,33 @@ export interface RateResult {
   prevState: number;
 }
 
-export function applyRating(card: Card, rating: Rating, now: number): RateResult {
+export function applyRating(
+  card: Card,
+  rating: Rating,
+  now: number,
+  weight?: number
+): RateResult {
   const result = engine.next(toFsrs(card), new Date(now), GRADE[rating]);
   const next = fromFsrs(card.problemId, result.card);
+  next.due = applyWeightToDue(next.due, now, weight);
   return { card: next, nextDue: next.due, prevDue: card.due, prevState: card.state };
 }
 
-export function previewIntervals(card: Card, now: number): Record<Rating, number> {
+/**
+ * 用权重缩放 FSRS 给出的间隔：权重低就提前，权重高就推后。
+ * 不足 1 天的学习步长（分钟级）不缩放，否则会把「当天再练一次」挤掉。
+ */
+function applyWeightToDue(due: number, now: number, weight?: number): number {
+  const days = (due - now) / DAY;
+  if (!Number.isFinite(days) || days < 1) return due;
+  const scaled = Math.max(1, Math.round(days * intervalFactor(weight)));
+  return now + scaled * DAY;
+}
+
+export function previewIntervals(card: Card, now: number, weight?: number): Record<Rating, number> {
   const scheduling = engine.repeat(toFsrs(card), new Date(now));
-  return {
-    1: scheduling[FsrsRating.Again].card.due.getTime(),
-    2: scheduling[FsrsRating.Hard].card.due.getTime(),
-    3: scheduling[FsrsRating.Good].card.due.getTime(),
-    4: scheduling[FsrsRating.Easy].card.due.getTime(),
-  };
+  const at = (r: Rating) => applyWeightToDue(scheduling[GRADE[r]].card.due.getTime(), now, weight);
+  return { 1: at(1), 2: at(2), 3: at(3), 4: at(4) };
 }
 
 /** 当前时刻「还记得」的预测概率（0–1）。新题/没复习过返回 0 */

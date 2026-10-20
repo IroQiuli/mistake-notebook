@@ -19,6 +19,8 @@ export interface MetaValue {
   errorTags: string[];
   /** 掌握程度：1 完全不会 … 4 已掌握 */
   mastery?: Mastery;
+  /** 自定义标题；留空时列表用「章节 · 第 N 题 · 日期」 */
+  title?: string;
 }
 
 interface MetadataFieldsProps {
@@ -359,6 +361,18 @@ export function MetadataFields({
               value={value.sourceNo ?? ''}
               onChange={(e) => set({ sourceNo: e.target.value })}
               placeholder="第 2 题"
+              className={inputCls}
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-zinc-500">
+              标题（可选）
+            </span>
+            <input
+              value={value.title ?? ''}
+              onChange={(e) => set({ title: e.target.value.slice(0, 40) || undefined })}
+              placeholder="留空自动用「章节 · 第 N 题 · 日期」"
               className={inputCls}
             />
           </label>

@@ -1,5 +1,6 @@
 import type { Card, Problem } from './types';
 import { learningDayEnd } from './time';
+import { weightOf } from './weight';
 
 export interface QueueOptions {
   now: number;
@@ -74,6 +75,7 @@ function sortDue(items: QueueItem[]): void {
   items.sort(
     (a, b) =>
       b.overdueDays - a.overdueDays ||
+      weightOf(a.problem) - weightOf(b.problem) ||
       b.problem.difficulty - a.problem.difficulty ||
       a.card.due - b.card.due
   );

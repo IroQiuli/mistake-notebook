@@ -3,6 +3,8 @@ import { useAssetUrl } from '../../hooks/useAssetUrl';
 import { formatDue } from '../../domain/time';
 import { masteryColor, masteryLevel } from '../../domain/taxonomy';
 import { isKeyProblem } from '../../domain/filter';
+import { displayTitle } from '../../domain/title';
+import { weightOf } from '../../domain/weight';
 import type { Card, Chapter, Problem, Topic } from '../../domain/types';
 import { cn } from '../../ui/cn';
 
@@ -42,7 +44,7 @@ export function ProblemRow({ problem, chapter, topics, card, subjectColor, now }
       <div className="min-w-0 flex-1 py-0.5">
         <div className="flex items-start justify-between gap-2">
           <div className="truncate text-sm font-medium text-zinc-800">
-            {chapter?.name ?? '未分类'}
+            {displayTitle(problem, chapter?.name)}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {level && !problem.archivedAt && (
@@ -70,16 +72,21 @@ export function ProblemRow({ problem, chapter, topics, card, subjectColor, now }
                 已掌握
               </span>
             ) : (
-              <span
-                className={cn(
-                  'rounded-full px-2 py-0.5 text-[10px]',
-                  card && card.due <= now
-                    ? 'bg-orange-50 text-orange-600'
-                    : 'bg-zinc-100 text-zinc-500'
-                )}
-              >
-                {card ? formatDue(card.due, now) : '无卡片'}
-              </span>
+              <>
+                <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                  W{weightOf(problem)}
+                </span>
+                <span
+                  className={cn(
+                    'rounded-full px-2 py-0.5 text-[10px]',
+                    card && card.due <= now
+                      ? 'bg-orange-50 text-orange-600'
+                      : 'bg-zinc-100 text-zinc-500'
+                  )}
+                >
+                  {card ? formatDue(card.due, now) : '无卡片'}
+                </span>
+              </>
             )}
           </div>
         </div>

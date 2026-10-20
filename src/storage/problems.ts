@@ -2,6 +2,7 @@ import { db } from './db';
 import { newId } from '../lib/id';
 import { newCard } from '../domain/scheduler';
 import { learningDayEnd } from '../domain/time';
+import { firstReviewDays, weightFromMastery, clampWeight } from '../domain/weight';
 import type { Chapter, Problem, Topic } from '../domain/types';
 
 export type ProblemInput = Omit<
@@ -9,12 +10,20 @@ export type ProblemInput = Omit<
   'id' | 'createdAt' | 'updatedAt' | 'archivedAt' | 'missingAsset'
 >;
 
+const DAY = 24 * 3600 * 1000;
+
+/**
+ * 新题按「掌握程度 + 难度」排第一次复习，不再一股脑塞进今天：
+ * 完全不会 → 1 天后，不熟 → 3 天，一般 → 7 天，掌握 → 14 天（难度再微调）。
+ */
 export async function createProblem(input: ProblemInput, now = Date.now()): Promise<string> {
   const id = newId();
-  const problem: Problem = { ...input, id, createdAt: now, updatedAt: now };
+  const weight = input.weight ?? weightFromMastery(input.mastery);
+  const problem: Problem = { ...input, weight, id, createdAt: now, updatedAt: now };
+  const due = now + firstReviewDays(input.mastery, input.difficulty) * DAY;
   await db.transaction('rw', db.problems, db.cards, db.topics, async () => {
     await db.problems.add(problem);
-    await db.cards.add({ ...newCard(now, id), due: now });
+    await db.cards.add({ ...newCard(now, id), due });
     for (const topicId of input.topicIds) {
       const topic = await db.topics.get(topicId);
       if (topic) await db.topics.update(topicId, { usageCount: topic.usageCount + 1 });
@@ -122,4 +131,9 @@ export async function createTopic(subjectId: string, name: string): Promise<Topi
   };
   await db.topics.add(topic);
   return topic;
+}
+
+/** 手动调权重（0~10），只影响后续排期，不改 FSRS 的记忆参数 */
+export async function setWeight(id: string, weight: number): Promise<void> {
+  await db.problems.update(id, { weight: clampWeight(weight), updatedAt: Date.now() });
 }

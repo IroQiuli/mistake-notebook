@@ -73,9 +73,14 @@ export async function collectOrphans(): Promise<number> {
   const used = new Set<string>();
   for (const p of problems) {
     used.add(p.stemAssetId);
+    if (p.thumbAssetId) used.add(p.thumbAssetId);
     p.answerAssetIds.forEach((a) => used.add(a));
   }
+  // 缩略图的 sourceAssetId 指向题干，不能因为「没被直接引用」就被清掉
   const all = await db.assets.toArray();
+  for (const a of all) {
+    if (a.sourceAssetId && used.has(a.sourceAssetId)) used.add(a.id);
+  }
   const orphans = all.filter((a) => !used.has(a.id));
   const bytes = orphans.reduce((sum, a) => sum + a.bytes, 0);
   await deleteAssets(orphans.map((a) => a.id));

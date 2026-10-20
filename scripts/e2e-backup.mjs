@@ -125,7 +125,7 @@ await b.page.goto(BASE + '/#/settings', { waitUntil: 'networkidle' });
 await b.page.waitForTimeout(600);
 check('B 端初始为空', (await b.page.locator('text=已存 0 道错题').count()) > 0);
 
-await b.page.locator('input[type=file]').setInputFiles(file);
+await b.page.getByTestId('import-file').setInputFiles(file);
 await b.page.waitForTimeout(400);
 check('提示输入密码', (await b.page.locator('text=这是一个加密备份').count()) > 0);
 
@@ -139,7 +139,7 @@ await b.page.locator('input[type=password]').fill(PASSWORD);
 await b.page.getByRole('button', { name: '导入', exact: true }).click();
 await b.page.waitForTimeout(2000);
 check('正确密码导入成功', (await b.page.locator('text=已存 1 道错题').count()) > 0);
-await b.page.goto(BASE + '/#/library', { waitUntil: 'networkidle' });
+await b.page.goto(BASE + '/#/search', { waitUntil: 'networkidle' });
 await b.page.waitForTimeout(600);
 check('题目内容还原', (await b.page.locator('text=加密备份测试题').count()) > 0);
 await b.page.screenshot({ path: path.join(SHOTS, '21-imported.png'), fullPage: true });

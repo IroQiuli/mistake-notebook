@@ -75,6 +75,10 @@ export interface Problem {
   errorTags?: string[];
   /** 掌握程度：1 完全不会 … 4 已掌握；未设表示还没分级 */
   mastery?: Mastery;
+  /** 权重 0~10：越高越熟、排期越靠后；评分会自动增减 */
+  weight?: number;
+  /** 自定义标题；没有时列表用「章节 · 第 N 题 · 日期」自动生成 */
+  title?: string;
 
   createdAt: number;
   updatedAt: number;

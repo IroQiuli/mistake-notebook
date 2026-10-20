@@ -157,8 +157,9 @@ await page.screenshot({ path: path.join(SHOTS, '31-stats-subject.png'), fullPage
 await page.getByRole('button', { name: /过程检测及控制仪表/ }).click();
 await page.waitForTimeout(900);
 const url = page.url();
-const rows = await page.locator('a[href*="/problem/"]').count();
-console.log('deep link:', url.includes('chapter='), '| filtered rows:', rows);
+// 章节页是左右滑动的卡片，不是链接列表
+const rows = await page.getByTestId('chapter-scroller').locator('article').count();
+console.log('deep link:', url.includes('/chapter/'), '| filtered rows:', rows);
 await page.screenshot({ path: path.join(SHOTS, '33-stats-deeplink.png'), fullPage: true });
 
 await page.setViewportSize({ width: 1280, height: 900 });
@@ -175,7 +176,7 @@ await page.screenshot({ path: path.join(SHOTS, '34-accuracy-chapters.png'), full
 
 // 筛选：真题分支
 await page.setViewportSize({ width: 390, height: 844 });
-await page.goto(BASE + '/#/library');
+await page.goto(BASE + '/#/search');
 await page.waitForTimeout(700);
 await page.getByRole('button', { name: /筛选/ }).click();
 await page.waitForTimeout(400);

@@ -20,14 +20,24 @@ const input = (): ProblemInput => ({
 });
 
 describe('createProblem', () => {
-  it('同时写入题目与卡片，due 为当前时间', async () => {
+  it('新题按掌握程度安排第一次复习，不直接塞进今天', async () => {
     const now = Date.now();
-    const id = await createProblem(input(), now);
+    const id = await createProblem({ ...input(), mastery: 2, difficulty: 3 }, now);
     const p = await db.problems.get(id);
     const c = await db.cards.get(id);
     expect(p).toBeTruthy();
-    expect(c!.due).toBe(now);
     expect(c!.state).toBe(0);
+    // 不熟 → 3 天后
+    expect(c!.due).toBe(now + 3 * 86400000);
+    // 权重跟着掌握程度走（不熟 = 4）
+    expect(p!.weight).toBe(4);
+  });
+
+  it('完全不会 + 高难度 → 1 天后就复习', async () => {
+    const now = Date.now();
+    const id = await createProblem({ ...input(), mastery: 1, difficulty: 5 }, now);
+    const c = await db.cards.get(id);
+    expect(c!.due).toBe(now + 86400000);
   });
 
   it('删除题目级联删除卡片与日志', async () => {

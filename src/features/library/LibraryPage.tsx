@@ -1,245 +1,170 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronRight, Search, SlidersHorizontal } from 'lucide-react';
 import { db } from '../../storage/db';
-import { countActiveFilters, filterProblems, isRealExam, type ProblemFilter } from '../../domain/filter';
-import { learningDayEnd } from '../../domain/time';
+import { isKeyProblem } from '../../domain/filter';
+import { cn } from '../../ui/cn';
 import { Button } from '../../ui/Button';
 import { EmptyState } from '../../ui/EmptyState';
-import { PageLoading } from '../../ui/Spinner';
-import { cn } from '../../ui/cn';
-import { ProblemRow } from './ProblemRow';
-import { FilterBar } from './FilterBar';
 
+/**
+ * 错题本目录：先按科目、再按章节折叠。
+ * 不直接铺题目 —— 题目列表在章节页（可左右滑动）和检索页里看。
+ */
 export default function LibraryPage() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
   const problems = useLiveQuery(() => db.problems.toArray(), [], []);
   const chapters = useLiveQuery(() => db.chapters.toArray(), [], []);
-  const topics = useLiveQuery(() => db.topics.toArray(), [], []);
-  const cards = useLiveQuery(() => db.cards.toArray(), [], []);
   const subjects = useLiveQuery(() => db.subjects.orderBy('order').toArray(), [], []);
+  const [open, setOpen] = useState<Set<string>>(new Set());
 
-  // 支持从统计页点章节跳进来：?subject=xx&chapter=yy
-  const initialChapter = params.get('chapter');
-  const [filter, setFilter] = useState<ProblemFilter>(
-    initialChapter ? { chapterIds: [initialChapter] } : {}
-  );
-  const [subjectId, setSubjectId] = useState<string | undefined>(
-    params.get('subject') ?? undefined
-  );
-  const [keyword, setKeyword] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
+  const active = useMemo(() => problems.filter((p) => !p.archivedAt), [problems]);
 
-  const pickSubject = (id: string | undefined) => {
-    setSubjectId(id);
-    // 换科目时清掉上一科目的章节筛选，避免筛出空列表
-    setFilter((f) => ({ ...f, chapterIds: [] }));
-  };
+  const byChapter = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of active) map.set(p.chapterId, (map.get(p.chapterId) ?? 0) + 1);
+    return map;
+  }, [active]);
 
-  const now = Date.now();
-  const cardMap = useMemo(() => new Map(cards.map((c) => [c.problemId, c])), [cards]);
-  const chapterMap = useMemo(() => new Map(chapters.map((c) => [c.id, c])), [chapters]);
-  const topicMap = useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
-  const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
-
-  const dueIds = useMemo(() => {
-    const end = learningDayEnd(now);
-    return new Set(cards.filter((c) => c.due <= end).map((c) => c.problemId));
-  }, [cards, now]);
-
-  const newIds = useMemo(
-    () => new Set(cards.filter((c) => c.state === 0).map((c) => c.problemId)),
-    [cards]
-  );
-
-  const years = useMemo(
+  const tree = useMemo(
     () =>
-      [...new Set(problems.map((p) => p.sourceYear).filter((y): y is number => Boolean(y)))].sort(
-        (a, b) => b - a
-      ),
-    [problems]
+      subjects.map((s) => {
+        const list = chapters
+          .filter((c) => c.subjectId === s.id)
+          .sort((a, b) => a.order - b.order)
+          .map((c) => ({ chapter: c, count: byChapter.get(c.id) ?? 0 }))
+          .filter((x) => x.count > 0);
+        return {
+          subject: s,
+          chapters: list,
+          total: list.reduce((sum, x) => sum + x.count, 0),
+        };
+      }),
+    [subjects, chapters, byChapter]
   );
 
-  const realProblems = useMemo(
-    () => problems.filter((p) => !p.archivedAt && isRealExam(p)),
-    [problems]
-  );
-  const realYears = useMemo(
-    () =>
-      [
-        ...new Set(
-          realProblems.map((p) => p.sourceYear).filter((y): y is number => Boolean(y))
-        ),
-      ].sort((a, b) => b - a),
-    [realProblems]
-  );
+  const keyCount = active.filter(isKeyProblem).length;
 
-  const merged = useMemo<ProblemFilter>(
-    () => ({ ...filter, subjectId, keyword }),
-    [filter, subjectId, keyword]
-  );
-
-  const list = useMemo(() => {
-    const filtered = filterProblems(problems, merged, chapters, topics, { dueIds, newIds });
-    return filtered.sort((a, b) => b.createdAt - a.createdAt);
-  }, [problems, merged, chapters, topics, dueIds, newIds]);
-
-  const activeCount = countActiveFilters(merged);
-
-  if (problems === undefined) return <PageLoading />;
+  if (problems.length === 0) {
+    return (
+      <div className="space-y-4">
+        <header className="pt-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">错题本</h1>
+        </header>
+        <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/50">
+          <EmptyState
+            title="还没有错题"
+            description="拍一张做错的题，它会按科目和章节自动归档。"
+            action={
+              <Button variant="primary" onClick={() => navigate('/capture')}>
+                录第一道错题
+              </Button>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      <header className="flex items-center justify-between pt-1">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">错题本</h1>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            共 {problems.filter((p) => !p.archivedAt).length} 道未掌握
-          </p>
-        </div>
-        <Button variant="primary" size="sm" onClick={() => navigate('/capture')}>
-          <Plus size={16} />
-          录入
-        </Button>
+      <header className="pt-1">
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">错题本</h1>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          共 {active.length} 道未掌握{keyCount > 0 ? ` · ${keyCount} 道重点` : ''}
+        </p>
       </header>
 
       <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-          <input
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder="搜错误原因、来源、章节、标签"
-            className="h-10 w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 text-sm outline-none placeholder:text-zinc-400 focus:border-orange-300"
-          />
-        </div>
         <button
           type="button"
-          onClick={() => setFilterOpen(true)}
-          className={cn(
-            'relative flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm',
-            activeCount > 0
-              ? 'border-orange-300 bg-orange-50 text-orange-600'
-              : 'border-zinc-200 bg-white text-zinc-600'
-          )}
+          onClick={() => navigate('/search')}
+          className="flex h-10 flex-1 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-400 active:bg-zinc-50"
+        >
+          <Search size={16} />
+          搜索或筛选错题
+        </button>
+        <button
+          type="button"
+          data-testid="library-search"
+          onClick={() => navigate('/search')}
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 active:bg-zinc-50"
+          aria-label="打开筛选"
         >
           <SlidersHorizontal size={16} />
-          筛选
-          {activeCount > 0 && (
-            <span className="rounded-full bg-orange-500 px-1.5 text-[10px] text-white">
-              {activeCount}
-            </span>
-          )}
         </button>
       </div>
 
-      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
-        <button
-          type="button"
-          onClick={() => pickSubject(undefined)}
-          className={cn(
-            'shrink-0 rounded-full px-3 py-1.5 text-xs',
-            !subjectId ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-600 ring-1 ring-zinc-200'
-          )}
-        >
-          全部
-        </button>
-        {subjects.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => pickSubject(s.id)}
-            className={cn(
-              'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs',
-              subjectId === s.id
-                ? 'bg-zinc-900 text-white'
-                : 'bg-white text-zinc-600 ring-1 ring-zinc-200'
-            )}
-          >
-            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
-            {s.name.replace('839 自动控制原理及过程控制', '839 自控')}
-          </button>
-        ))}
-        <button
-          type="button"
-          data-testid="quick-key-only"
-          onClick={() =>
-            setFilter((f) => ({ ...f, mastery: f.mastery?.length ? [] : [1, 2] }))
-          }
-          className={cn(
-            'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs',
-            filter.mastery?.length
-              ? 'text-white'
-              : 'bg-white text-zinc-600 ring-1 ring-zinc-200'
-          )}
-          style={filter.mastery?.length ? { backgroundColor: '#9a3412' } : undefined}
-        >
-          <span
-            className="h-2 w-2 rounded-full"
-            style={{ backgroundColor: filter.mastery?.length ? '#fed7aa' : '#9a3412' }}
-          />
-          重点关注
-        </button>
-      </div>
-
-      {list.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/50">
-          <EmptyState
-            icon={<Plus size={26} />}
-            title={activeCount > 0 ? '没有符合条件的错题' : '还没有错题'}
-            description={
-              activeCount > 0 ? '换个筛选条件试试' : '把做错的题拍下来，它会自动进入复习队列'
-            }
-            action={
-              activeCount > 0 ? (
-                <Button
-                  onClick={() => {
-                    setFilter({});
-                    setKeyword('');
-                    pickSubject(undefined);
-                  }}
+      <div className="space-y-2">
+        {tree
+          .filter((t) => t.total > 0)
+          .map((node) => {
+            const isOpen = open.has(node.subject.id);
+            return (
+              <section
+                key={node.subject.id}
+                className="overflow-hidden rounded-2xl border border-zinc-200 bg-white"
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpen((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(node.subject.id)) next.delete(node.subject.id);
+                      else next.add(node.subject.id);
+                      return next;
+                    })
+                  }
+                  className="flex w-full items-center justify-between px-4 py-3.5 text-left active:bg-zinc-50"
                 >
-                  清空筛选
-                </Button>
-              ) : (
-                <Button variant="primary" onClick={() => navigate('/capture')}>
-                  录第一道错题
-                </Button>
-              )
-            }
-          />
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {list.map((p) => (
-            <ProblemRow
-              key={p.id}
-              problem={p}
-              chapter={chapterMap.get(p.chapterId)}
-              topics={p.topicIds.map((id) => topicMap.get(id)).filter(Boolean) as never}
-              card={cardMap.get(p.id)}
-              subjectColor={subjectMap.get(p.subjectId)?.color}
-              now={now}
-            />
-          ))}
-        </div>
-      )}
+                  <span className="flex items-center gap-2 text-sm font-medium text-zinc-800">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: node.subject.color }}
+                    />
+                    {node.subject.name.replace('839 自动控制原理及过程控制', '839 自控')}
+                  </span>
+                  <span className="flex items-center gap-2 text-[11px] text-zinc-400">
+                    {node.chapters.length} 章 · {node.total} 题
+                    <ChevronDown
+                      size={15}
+                      className={cn('transition-transform', isOpen && 'rotate-180')}
+                    />
+                  </span>
+                </button>
 
-      <FilterBar
-        open={filterOpen}
-        onClose={() => setFilterOpen(false)}
-        value={filter}
-        onApply={setFilter}
-        subjects={subjects}
-        chapters={chapters}
-        topics={topics}
-        subjectId={subjectId}
-        years={years}
-        realCount={realProblems.length}
-        realYears={realYears}
-      />
+                {isOpen && (
+                  <ul className="border-t border-zinc-100">
+                    {node.chapters.map(({ chapter, count }) => (
+                      <li key={chapter.id} className="border-b border-zinc-50 last:border-0">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/chapter/${chapter.id}`)}
+                          className="flex w-full items-center gap-2 px-4 py-3 pl-6 text-left active:bg-zinc-50"
+                        >
+                          <span className="min-w-0 flex-1 truncate text-[13px] text-zinc-700">
+                            {chapter.name}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500">
+                            {count} 题
+                          </span>
+                          <ChevronRight size={14} className="shrink-0 text-zinc-300" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
+      </div>
+
+      <p className="pt-1 text-center text-[10px] leading-relaxed text-zinc-400">
+        点科目展开章节，点章节左右滑动看这一章的题
+        <br />
+        要按条件找题，用上面的「搜索或筛选」
+      </p>
     </div>
   );
 }

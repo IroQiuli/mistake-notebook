@@ -95,7 +95,7 @@ await page.evaluate(async () => {
 
 await page.reload({ waitUntil: 'networkidle' });
 await page.waitForTimeout(600);
-await page.goto(BASE + '/#/library');
+await page.goto(BASE + '/#/search');
 await page.waitForTimeout(1000);
 
 const rows = () => page.locator('a[href*="/problem/"]').count();
@@ -141,7 +141,7 @@ await page.waitForTimeout(700);
 await page.screenshot({ path: path.join(SHOTS, '62-mastery-problem.png'), fullPage: true });
 
 // 回错题本确认落库
-await page.goto(BASE + '/#/library');
+await page.goto(BASE + '/#/search');
 await page.waitForTimeout(900);
 const after = await page.locator('a[href*="/problem/"]').allInnerTexts();
 check('改级后出现重点·不熟', after.some((t) => t.includes('重点·不熟')));

@@ -207,13 +207,44 @@ await page.goto(BASE + '/#/settings');
 await page.waitForTimeout(800);
 await page.screenshot({ path: path.join(OUT, 'doc-goals.png'), fullPage: true });
 
-// 错题本：左侧色条 = 掌握程度深浅
+// 错题本目录（科目 → 章节折叠）
 await page.goto(BASE + '/#/library');
 await page.waitForTimeout(1000);
 await page.screenshot({ path: path.join(OUT, 'doc-library.png'), fullPage: true });
 
+// 章节页：左右滑动
+const chapterId = await page.evaluate(async () => {
+  const db = await new Promise((res, rej) => {
+    const req = indexedDB.open('cuotiben');
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+  const list = await new Promise((res, rej) => {
+    const tx = db.transaction('chapters', 'readonly');
+    const r = tx.objectStore('chapters').getAll();
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  const probs = await new Promise((res, rej) => {
+    const tx = db.transaction('problems', 'readonly');
+    const r = tx.objectStore('problems').getAll();
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  const count = new Map();
+  probs.filter((p) => !p.archivedAt).forEach((p) => count.set(p.chapterId, (count.get(p.chapterId) ?? 0) + 1));
+  const best = [...count.entries()].sort((a, b) => b[1] - a[1])[0];
+  db.close();
+  return best ? best[0] : list[0].id;
+});
+await page.goto(BASE + '/#/chapter/' + chapterId);
+await page.waitForTimeout(1000);
+await page.screenshot({ path: path.join(OUT, 'doc-chapter.png'), fullPage: false });
+
 // 筛选手感：掌握程度分组
-await page.getByRole('button', { name: /筛选/ }).click();
+await page.goto(BASE + '/#/search');
+await page.waitForTimeout(800);
+await page.getByRole('button', { name: '筛选', exact: true }).click();
 await page.waitForTimeout(600);
 await page.screenshot({ path: path.join(OUT, 'doc-filter-mastery.png') });
 await page.getByRole('button', { name: '应用' }).click();

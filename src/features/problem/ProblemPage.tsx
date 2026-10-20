@@ -2,12 +2,22 @@ import { useMemo, useRef, useState } from 'react';
 import { newId } from '../../lib/id';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, CalendarClock, ImagePlus, PenLine, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+  ImagePlus,
+  Minus,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { db } from '../../storage/db';
 import {
   deleteProblem,
   markArchived,
   reschedule,
+  setWeight,
   updateProblem,
 } from '../../storage/problems';
 import { putAsset, getUrl } from '../../storage/assets';
@@ -15,6 +25,8 @@ import { applyRating } from '../../domain/scheduler';
 import { formatDateTime, formatDue } from '../../domain/time';
 import { RATING_LABEL } from '../../domain/types';
 import { MASTERY_LEVELS, masteryLevel, masteryTextColor } from '../../domain/taxonomy';
+import { weightLabel, weightOf } from '../../domain/weight';
+import { displayTitle } from '../../domain/title';
 import { useAssetUrl } from '../../hooks/useAssetUrl';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
@@ -26,9 +38,14 @@ import { cn } from '../../ui/cn';
 import { ProblemForm } from '../capture/ProblemForm';
 import type { MetaValue } from '../capture/MetadataFields';
 import { canvasToBlob, prepareImage } from '../capture/pipeline';
-import { AnnotationOverlay } from './AnnotationOverlay';
-import { InkSurface } from '../../ink/InkSurface';
-import { useInk } from '../../ink/useInk';
+
+const RATING_BADGE: Record<number, string> = {
+  0: 'bg-zinc-100 text-zinc-500',
+  1: 'bg-red-50 text-red-600',
+  2: 'bg-amber-50 text-amber-700',
+  3: 'bg-emerald-50 text-emerald-700',
+  4: 'bg-sky-50 text-sky-700',
+};
 
 export default function ProblemPage() {
   const { id = '' } = useParams();
@@ -44,6 +61,17 @@ export default function ProblemPage() {
   const subject = useLiveQuery(
     () => (problem ? db.subjects.get(problem.subjectId) : undefined),
     [problem?.subjectId]
+  );
+  const siblings = useLiveQuery(
+    async () => {
+      if (!problem) return [] as { id: string }[];
+      const list = await db.problems.where('chapterId').equals(problem.chapterId).toArray();
+      return list
+        .filter((p) => !p.archivedAt)
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map((p) => ({ id: p.id }));
+    },
+    [problem?.chapterId]
   );
   const logs = useLiveQuery(
     async () => {
@@ -71,14 +99,13 @@ export default function ProblemPage() {
   );
 
   const [editOpen, setEditOpen] = useState(false);
-  const [annotating, setAnnotating] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
-  const annotation = useInk('problem-stem', problem?.id ?? '', 0);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [showAnswer, setShowAnswer] = useState(false);
   const [zoomAnswer, setZoomAnswer] = useState<number | null>(null);
   const [customDays, setCustomDays] = useState('');
+  const [showAllLogs, setShowAllLogs] = useState(false);
   const answerInput = useRef<HTMLInputElement>(null);
   const now = Date.now();
 
@@ -90,6 +117,12 @@ export default function ProblemPage() {
   if (!problem) return <PageLoading />;
 
   const cardPreview = card ? applyRating(card, 3, now) : null;
+  const weight = weightOf(problem);
+  const list = siblings ?? [];
+  const index = list.findIndex((s) => s.id === problem.id);
+  const prev = index > 0 ? list[index - 1] : null;
+  const next = index >= 0 && index < list.length - 1 ? list[index + 1] : null;
+  const title = displayTitle(problem, chapter?.name);
 
   const addAnswerImages = async (files: FileList | null) => {
     if (!files || !problem) return;
@@ -139,7 +172,10 @@ export default function ProblemPage() {
     wrongNote: problem.wrongNote,
     errorTags: problem.errorTags ?? [],
     mastery: problem.mastery,
+    title: problem.title,
   };
+
+  const shownLogs = showAllLogs ? logs : logs.slice(0, 5);
 
   return (
     <div className="space-y-4">
@@ -147,18 +183,15 @@ export default function ProblemPage() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="-ml-2 flex h-10 w-10 items-center justify-center rounded-lg text-zinc-600 active:bg-zinc-100"
-          aria-label="返回"
+          className="-ml-2 flex h-10 items-center gap-1 rounded-lg px-2 text-zinc-600 active:bg-zinc-100"
+          aria-label="返回上一页"
         >
           <ArrowLeft size={20} />
+          <span className="text-xs">返回</span>
         </button>
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
             编辑
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setAnnotating(true)} disabled={!stemUrl}>
-            <PenLine size={14} />
-            批注
           </Button>
           <Button
             variant="ghost"
@@ -170,20 +203,24 @@ export default function ProblemPage() {
         </div>
       </div>
 
+      <div className="px-0.5">
+        <h1 className="text-lg font-semibold leading-snug text-zinc-900">{title}</h1>
+        <p className="mt-0.5 text-[11px] text-zinc-400">
+          {subject?.name.replace('839 自动控制原理及过程控制', '839 自控')} ·{' '}
+          {chapter?.name ?? '未分类'}
+          {problem.sourcePaper ? ` · ${problem.sourcePaper}` : ''}
+        </p>
+      </div>
+
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
         {stemUrl ? (
-          <div className="max-h-[58vh] overflow-y-auto bg-zinc-100">
-            <InkSurface
-              src={stemUrl}
-              strokes={annotation.strokes}
-              onChange={() => {}}
-              tool="pen"
-              color="#18181b"
-              width={0.005}
-              readOnly
-              alt="题干"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setZoomOpen(true)}
+            className="block max-h-[58vh] w-full overflow-y-auto bg-zinc-100"
+          >
+            <img src={stemUrl} alt="题干" className="block h-auto w-full" />
+          </button>
         ) : (
           <div className="flex h-40 items-center justify-center text-sm text-zinc-400">
             图片缺失（导入时未包含）
@@ -191,11 +228,11 @@ export default function ProblemPage() {
         )}
         <div className="flex items-center justify-between border-t border-zinc-100 px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2 text-xs text-zinc-500">
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: subject?.color }} />
-            <span className="truncate">
-              {subject?.name.replace('839 自动控制原理及过程控制', '839 自控')} ·{' '}
-              {chapter?.name ?? '未分类'}
-            </span>
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: subject?.color }}
+            />
+            <span className="truncate">权重 {weight} · {weightLabel(weight)}</span>
           </div>
           <button
             type="button"
@@ -210,18 +247,23 @@ export default function ProblemPage() {
       <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3">
         <div className="min-w-0">
           <div className="text-xs text-zinc-500">
-            {problem.archivedAt ? '已掌握，不再排期' : `下次复习：${card ? formatDue(card.due, now) : '—'}`}
+            {problem.archivedAt
+              ? '已掌握，不再排期'
+              : `下次复习：${card ? formatDue(card.due, now) : '—'}`}
           </div>
           <div className="mt-0.5 truncate text-[11px] text-zinc-400">
-            {card
-              ? `已复习 ${card.reps} 次 · 忘记 ${card.lapses} 次`
-              : '尚无复习记录'}
+            {card ? `已复习 ${card.reps} 次 · 忘记 ${card.lapses} 次` : '尚无复习记录'}
             {cardPreview && !problem.archivedAt
               ? ` · 若现在评「记得」→ ${formatDue(cardPreview.nextDue, now)}`
               : ''}
           </div>
         </div>
-        <Button size="sm" variant="secondary" className="shrink-0" onClick={() => setRescheduleOpen(true)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="shrink-0"
+          onClick={() => setRescheduleOpen(true)}
+        >
           <CalendarClock size={14} />
           改期
         </Button>
@@ -259,6 +301,39 @@ export default function ProblemPage() {
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3">
+          <span className="text-xs font-medium text-zinc-500">权重</span>
+          <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] text-orange-600">
+            {weightLabel(weight)}
+          </span>
+          <span className="text-[10px] text-zinc-400">越高排期越靠后</span>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              data-testid="weight-minus"
+              onClick={() => void setWeight(problem.id, weight - 1)}
+              disabled={weight <= 0}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 active:bg-zinc-50 disabled:text-zinc-300"
+              aria-label="降低权重"
+            >
+              <Minus size={14} />
+            </button>
+            <span className="w-7 text-center text-sm font-semibold tabular-nums text-zinc-900">
+              {weight}
+            </span>
+            <button
+              type="button"
+              data-testid="weight-plus"
+              onClick={() => void setWeight(problem.id, weight + 1)}
+              disabled={weight >= 10}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 active:bg-zinc-50 disabled:text-zinc-300"
+              aria-label="提高权重"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
       </section>
 
@@ -323,7 +398,10 @@ export default function ProblemPage() {
       {problemTopics.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {problemTopics.map((t) => (
-            <span key={t.id} className="rounded-lg bg-white px-2.5 py-1 text-xs text-zinc-600 ring-1 ring-zinc-200">
+            <span
+              key={t.id}
+              className="rounded-lg bg-white px-2.5 py-1 text-xs text-zinc-600 ring-1 ring-zinc-200"
+            >
               {t.name}
             </span>
           ))}
@@ -379,29 +457,72 @@ export default function ProblemPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-zinc-700">复习记录</h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-zinc-700">复习记录</h2>
+          <span className="text-[10px] text-zinc-400">共 {logs.length} 条</span>
+        </div>
         {logs.length === 0 ? (
           <div className="rounded-xl border border-dashed border-zinc-300 bg-white/60">
             <EmptyState title="还没有复习过" description="第一次复习会记录在这里" />
           </div>
         ) : (
-          <ul className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 bg-white">
-            {logs.slice(0, 10).map((log) => (
-              <li key={log.id} className="flex items-center justify-between px-4 py-2.5 text-xs">
-                <span className="text-zinc-500">{formatDateTime(log.reviewedAt)}</span>
-                <span className="font-medium text-zinc-700">
-                  {log.rating === 0 ? '手动改期' : RATING_LABEL[log.rating]}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+              {shownLogs.map((log) => (
+                <li key={log.id} className="flex items-center justify-between px-4 py-2.5 text-xs">
+                  <span className="text-zinc-500">{formatDateTime(log.reviewedAt)}</span>
+                  <span
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-[11px]',
+                      RATING_BADGE[log.rating] ?? RATING_BADGE[0]
+                    )}
+                  >
+                    {log.rating === 0 ? '手动改期' : RATING_LABEL[log.rating]}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {logs.length > 5 && (
+              <button
+                type="button"
+                onClick={() => setShowAllLogs((v) => !v)}
+                className="mt-2 w-full rounded-lg bg-zinc-50 py-2 text-[11px] text-zinc-500 active:bg-zinc-100"
+              >
+                {showAllLogs ? '收起' : `展开全部 ${logs.length} 条`}
+              </button>
+            )}
+          </>
         )}
       </section>
 
-      <div className="flex gap-3 pb-4">
+      <div className="flex items-stretch gap-2">
+        <Button
+          variant="secondary"
+          block
+          disabled={!prev}
+          onClick={() => prev && navigate(`/problem/${prev.id}`)}
+        >
+          <ChevronLeft size={15} />
+          上一题
+        </Button>
+        <Button
+          variant="secondary"
+          block
+          disabled={!next}
+          onClick={() => next && navigate(`/problem/${next.id}`)}
+        >
+          下一题
+          <ChevronRight size={15} />
+        </Button>
+      </div>
+
+      <div className="flex gap-2 pb-4">
+        <Button variant="ghost" block onClick={() => navigate('/library')}>
+          返回错题本
+        </Button>
         <Button variant="danger" block onClick={() => setDeleteOpen(true)}>
           <Trash2 size={16} />
-          删除这道题
+          删除
         </Button>
       </div>
 
@@ -433,11 +554,7 @@ export default function ProblemPage() {
             { label: '14 天后', days: 14 },
             { label: '30 天后', days: 30 },
           ].map((opt) => (
-            <Button
-              key={opt.days}
-              block
-              onClick={() => void applyReschedule(opt.days)}
-            >
+            <Button key={opt.days} block onClick={() => void applyReschedule(opt.days)}>
               {opt.label}
             </Button>
           ))}
@@ -472,12 +589,7 @@ export default function ProblemPage() {
         </div>
       </Dialog>
 
-      <Dialog
-        open={zoomAnswer !== null}
-        onClose={() => setZoomAnswer(null)}
-        title="答案"
-        size="lg"
-      >
+      <Dialog open={zoomAnswer !== null} onClose={() => setZoomAnswer(null)} title="答案" size="lg">
         {zoomAnswer !== null && answerUrls[zoomAnswer] && (
           <ZoomableImage
             src={answerUrls[zoomAnswer].url}
@@ -512,17 +624,6 @@ export default function ProblemPage() {
           <ZoomableImage src={stemUrl} className="h-[68vh] w-full rounded-lg" alt="题干大图" />
         )}
       </Dialog>
-
-      {annotating && stemUrl && (
-        <AnnotationOverlay
-          problemId={problem.id}
-          src={stemUrl}
-          onClose={() => {
-            setAnnotating(false);
-            void annotation.reload();
-          }}
-        />
-      )}
     </div>
   );
 }

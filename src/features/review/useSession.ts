@@ -3,6 +3,7 @@ import { newId } from '../../lib/id';
 import { db } from '../../storage/db';
 import { buildQueue, type QueueItem } from '../../domain/queue';
 import { applyRating } from '../../domain/scheduler';
+import { adjustWeight, weightOf } from '../../domain/weight';
 import type { Rating } from '../../domain/types';
 
 export interface SessionStats {
@@ -11,7 +12,7 @@ export interface SessionStats {
 }
 
 /**
- * @param subjectId 只复习某个科目（今日页的科目快捷入口）
+ * @param subjectId 只复习某个科目（首页的科目入口 / 复习页顶部切换）
  * @param paperIds  套卷模式的题目顺序；传了就不看到期状态，按给定顺序逐题做
  */
 export function useSession(subjectId?: string, paperIds?: string[] | null) {
@@ -62,15 +63,32 @@ export function useSession(subjectId?: string, paperIds?: string[] | null) {
     setShownAt(Date.now());
   }, []);
 
+  /** 上一题 / 下一题：只移动指针，不改任何数据 */
+  const jump = useCallback(
+    (delta: number) => {
+      setIndex((i) => {
+        const next = i + delta;
+        if (!queue || next < 0) return i;
+        return Math.min(queue.length, next);
+      });
+      setRevealed(false);
+      setShownAt(Date.now());
+    },
+    [queue]
+  );
+
   const rate = useCallback(
     async (rating: Rating) => {
       if (!current) return;
       const now = Date.now();
-      const result = applyRating(current.card, rating, now);
+      const weight = weightOf(current.problem);
+      const result = applyRating(current.card, rating, now, weight);
+      const nextWeight = adjustWeight(weight, rating);
       const durationMs = now - shownAt;
 
-      await db.transaction('rw', db.cards, db.reviewLogs, async () => {
+      await db.transaction('rw', db.cards, db.reviewLogs, db.problems, async () => {
         await db.cards.put(result.card);
+        await db.problems.update(current.problem.id, { weight: nextWeight });
         await db.reviewLogs.add({
           id: newId(),
           problemId: current.problem.id,
@@ -102,5 +120,5 @@ export function useSession(subjectId?: string, paperIds?: string[] | null) {
     };
   }, [stats, startedAt]);
 
-  return { queue, index, current, revealed, finished, stats, summary, reveal, rate };
+  return { queue, index, current, revealed, finished, stats, summary, reveal, rate, jump };
 }

@@ -13,6 +13,7 @@ import { checkIntegrity, flagMissingAssets, type IntegrityReport } from '../../s
 import { persistenceState, requestPersistence, type PersistState } from '../../storage/persistence';
 import { collectOrphans, formatBytes, storageUsage } from '../../storage/assets';
 import { createChapter } from '../../storage/problems';
+import { canvasToBlob, prepareImage } from '../capture/pipeline';
 import { formatDateTime } from '../../domain/time';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
@@ -61,6 +62,8 @@ export default function SettingsPage() {
   const problems = useLiveQuery(() => db.problems.count(), [], 0);
   const assets = useLiveQuery(() => db.assets.count(), [], 0);
   const lastBackupAt = useLiveQuery(() => getSetting<number>('lastBackupAt', 0), [], 0);
+  const wallpaper = useLiveQuery(() => getSetting<string>('wallpaper', ''), [], '');
+  const wallRef = useRef<HTMLInputElement>(null);
 
   const refreshUsage = () => {
     storageUsage().then(setUsage).catch(() => {});
@@ -236,6 +239,7 @@ export default function SettingsPage() {
 
         <input
           ref={importRef}
+          data-testid="import-file"
           type="file"
           accept=".zip,.ctbx,application/zip,application/octet-stream"
           className="hidden"
@@ -298,6 +302,77 @@ export default function SettingsPage() {
             ? '浏览器已承诺不主动清理本站数据。'
             : '建议申请持久化存储，并定期导出加密备份放网盘。'}
         </p>
+      </Section>
+
+      <Section title="外观">
+        <div className="flex items-center gap-3">
+          <div
+            className="h-16 w-24 shrink-0 rounded-lg bg-zinc-100 ring-1 ring-zinc-200"
+            style={
+              wallpaper
+                ? { backgroundImage: `url(${wallpaper})`, backgroundSize: 'cover' }
+                : undefined
+            }
+          >
+            {!wallpaper && (
+              <div className="flex h-full items-center justify-center text-[10px] text-zinc-400">
+                无壁纸
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm text-zinc-800">背景壁纸</div>
+            <div className="mt-0.5 text-[11px] leading-relaxed text-zinc-400">
+              压缩到 1080px 宽再存，卡片仍是白底不影响阅读
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex gap-2">
+          <Button block onClick={() => wallRef.current?.click()}>
+            <Upload size={15} />
+            {wallpaper ? '换一张' : '上传壁纸'}
+          </Button>
+          {wallpaper && (
+            <Button
+              block
+              onClick={async () => {
+                await setSetting('wallpaper', '');
+                toast.show('已移除壁纸', 'info');
+              }}
+            >
+              移除
+            </Button>
+          )}
+        </div>
+
+        <input
+          ref={wallRef}
+          data-testid="wallpaper-file"
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            try {
+              const { canvas } = await prepareImage(file, 1080);
+              const blob = await canvasToBlob(canvas, 'image/jpeg', 0.82);
+              const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result));
+                reader.onerror = () => reject(reader.error);
+                reader.readAsDataURL(blob);
+              });
+              await setSetting('wallpaper', dataUrl);
+              toast.show('壁纸已更新', 'success');
+            } catch (err) {
+              console.error(err);
+              toast.show('上传失败', 'error');
+            }
+          }}
+        />
       </Section>
 
       <Section title="学习目标">
@@ -454,7 +529,7 @@ export default function SettingsPage() {
 
       <Section title="关于">
         <div className="space-y-1.5 text-xs leading-relaxed text-zinc-500">
-          <p>错题簿 v0.6.0 · 本地优先的考研错题复习工具</p>
+          <p>错题簿 v0.7.0 · 本地优先的考研错题复习工具</p>
           <p>排期算法：FSRS-5，目标保留率 90%</p>
           <p>学习日边界：每天 04:00（凌晨复习算前一天）</p>
           <p>备份加密：PBKDF2-SHA256（60 万次迭代）+ AES-256-GCM</p>
