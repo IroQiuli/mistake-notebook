@@ -3,7 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, ChevronDown, Download, FileSpreadsheet } from 'lucide-react';
 import { db } from '../../storage/db';
-import { Collapsible } from '../../ui/Collapsible';
 import { Donut, HBars, LineChart, VBars } from '../../ui/charts';
 import { downloadChartPng, downloadCsv } from '../../lib/exportChart';
 import {
@@ -20,6 +19,7 @@ import {
   subjectVolume,
 } from '../../domain/stats';
 import { ERROR_TAG_COLORS, MASTERY_LEVELS, MASTERY_UNSET_COLOR } from '../../domain/taxonomy';
+import { RATING_LABEL } from '../../domain/types';
 import { practiceChapter } from '../../storage/problems';
 import { useToast } from '../../ui/Toast';
 import { learningDayStart } from '../../domain/time';
@@ -30,6 +30,14 @@ const WEEKS = 16;
 const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
 
 type ChartKey = 'trend' | 'accuracy' | 'tags' | 'mastery' | 'volume';
+
+type StatsView = 'overview' | 'charts' | 'deep';
+
+const VIEWS: { key: StatsView; label: string }[] = [
+  { key: 'overview', label: '概览' },
+  { key: 'charts', label: '图表' },
+  { key: 'deep', label: '深入分析' },
+];
 
 const CHARTS: { key: ChartKey; label: string; hint: string }[] = [
   { key: 'trend', label: '复习趋势', hint: '最近 14 天每天复习了几次，看节奏有没有断' },
@@ -217,11 +225,47 @@ export default function StatsPage() {
 
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const visibleMastery = mastery.filter((m) => !subjectFilter || m.subjectId === subjectFilter);
+  /** 深入分析里默认只列前 8 章，避免页面被撑长 */
+  const [showAllMastery, setShowAllMastery] = useState(false);
+  const masteryShown = showAllMastery ? visibleMastery : visibleMastery.slice(0, 8);
   const activeCount = problems.filter((p) => !p.archivedAt).length;
   const dueToday = forecastDays[0]?.count ?? 0;
 
   const [chart, setChart] = useState<ChartKey>('trend');
   const chartRef = useRef<HTMLDivElement>(null);
+
+  const [view, setView] = useState<StatsView>(() => {
+    try {
+      const saved = localStorage.getItem('statsView') as StatsView | null;
+      return saved === 'charts' || saved === 'deep' ? saved : 'overview';
+    } catch {
+      return 'overview';
+    }
+  });
+  const changeView = (next: StatsView) => {
+    setView(next);
+    try {
+      localStorage.setItem('statsView', next);
+    } catch {
+      /* 隐私模式下写不了，忽略 */
+    }
+  };
+
+  /** 近 30 天的评分构成与平均用时 */
+  const timeStats = useMemo(() => {
+    const list = logs.filter(
+      (l) => l.rating !== 0 && l.reviewedAt >= since30 && (l.durationMs ?? 0) > 0
+    );
+    const total = list.length;
+    const avgMs = total ? list.reduce((s, l) => s + (l.durationMs ?? 0), 0) / total : 0;
+    return { total, avgMs };
+  }, [logs, since30]);
+
+  /** 最该补的章节：保持率最低的前 5 个 */
+  const weakest = useMemo(
+    () => [...mastery].sort((a, b) => a.retention - b.retention).slice(0, 5),
+    [mastery]
+  );
 
   const chartData = useMemo(() => {
     const stamp = new Date(now).toISOString().slice(0, 10).replace(/-/g, '');
@@ -387,26 +431,121 @@ export default function StatsPage() {
         </p>
       </header>
 
-      <section className="grid grid-cols-4 gap-2">
-        {[
-          { label: '累计复习', value: logs.length },
-          { label: '今天到期', value: dueToday },
-          { label: '平均保持率', value: `${Math.round(retention * 100)}%` },
-          {
-            label: '近30天正确率',
-            value: accTotals.total ? `${Math.round(overallAccuracy * 100)}%` : '—',
-          },
-        ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-zinc-200 bg-white px-2 py-2.5">
-            <div className="text-base font-semibold tabular-nums text-zinc-900">{s.value}</div>
-            <div className="mt-0.5 text-[10px] leading-tight text-zinc-500">{s.label}</div>
-          </div>
-        ))}
-      </section>
+      <div className="sticky top-0 z-20 -mx-4 bg-zinc-50/95 px-4 py-2 backdrop-blur">
+        <div
+          className="grid gap-1 rounded-xl bg-zinc-100 p-1"
+          style={{ gridTemplateColumns: `repeat(${VIEWS.length}, minmax(0, 1fr))` }}
+        >
+          {VIEWS.map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              data-testid={`stats-view-${v.key}`}
+              onClick={() => changeView(v.key)}
+              className={cn(
+                'rounded-lg py-1.5 text-xs font-medium transition-colors',
+                view === v.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
+              )}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <Heatmap counts={counts} />
+      {view === 'overview' && (
+        <>
+          <section className="grid grid-cols-4 gap-2">
+            {[
+              { label: '累计复习', value: logs.length },
+              { label: '今天到期', value: dueToday },
+              { label: '平均保持率', value: `${Math.round(retention * 100)}%` },
+              {
+                label: '近30天正确率',
+                value: accTotals.total ? `${Math.round(overallAccuracy * 100)}%` : '—',
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="rounded-xl border border-zinc-200 bg-white px-2 py-2.5"
+              >
+                <div className="text-base font-semibold tabular-nums text-zinc-900">{s.value}</div>
+                <div className="mt-0.5 text-[10px] leading-tight text-zinc-500">{s.label}</div>
+              </div>
+            ))}
+          </section>
 
-      <Forecast days={forecastDays} onPick={() => navigate('/review')} />
+          <Heatmap counts={counts} />
+
+          <Forecast days={forecastDays} onPick={() => navigate('/review')} />
+
+          <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <div className="mb-2 flex items-baseline justify-between">
+              <h2 className="text-sm font-medium text-zinc-800">这周小结</h2>
+              <span className="text-[10px] text-zinc-400">看趋势请切到「图表」</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-lg font-semibold tabular-nums text-zinc-900">
+                  {counts.slice(-7).reduce((s, d) => s + d.count, 0)}
+                </div>
+                <div className="text-[10px] text-zinc-400">近 7 天复习</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold tabular-nums text-zinc-900">
+                  {counts.filter((d) => d.count > 0).length}
+                </div>
+                <div className="text-[10px] text-zinc-400">有复习的天数</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold tabular-nums text-zinc-900">
+                  {Math.round(retention * 100)}%
+                </div>
+                <div className="text-[10px] text-zinc-400">当前保持率</div>
+              </div>
+            </div>
+          </section>
+
+          {weakest.length > 0 && (
+            <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="text-sm font-medium text-zinc-800">优先补强</h2>
+                <span className="text-[10px] text-zinc-400">保持率最低的 5 章</span>
+              </div>
+              <ul className="space-y-2">
+                {weakest.map((m, i) => (
+                  <li key={m.chapterId} className="flex items-center gap-2">
+                    <span className="w-4 shrink-0 text-center text-[10px] tabular-nums text-zinc-300">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-700">
+                      {m.chapterName}
+                    </span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">
+                      {Math.round(m.retention * 100)}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const n = await practiceChapter(m.chapterId, 5);
+                        toast.show(
+                          n > 0 ? `已把 ${n} 道题加入今日队列` : '这个章节的题今天都已在队列里',
+                          n > 0 ? 'success' : 'info'
+                        );
+                      }}
+                      className="shrink-0 rounded-lg border border-orange-200 px-2 py-1 text-[10px] text-orange-600 active:bg-orange-50"
+                    >
+                      加练
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
+
+      {view === 'charts' && (
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="flex items-start justify-between gap-2">
@@ -459,21 +598,62 @@ export default function StatsPage() {
           {CHARTS.find((c) => c.key === chart)?.hint}
         </p>
       </section>
+      )}
 
-      <div className="flex items-center gap-2 pt-1">
-        <span className="h-px flex-1 bg-zinc-200" />
-        <span className="text-[11px] text-zinc-400">深入分析 · 点开看细节</span>
-        <span className="h-px flex-1 bg-zinc-200" />
-      </div>
+      {view === 'deep' && (
+        <>
+          <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="text-sm font-medium text-zinc-800">复习质量</h2>
+              <span className="text-[10px] text-zinc-400">近 30 天</span>
+            </div>
 
-      <Collapsible
-        title="回忆正确率"
-        summary={
-          accTotals.total
-            ? `近 30 天 ${accTotals.total} 次评分 · 正确率 ${Math.round(overallAccuracy * 100)}%`
-            : '近 30 天还没有评分记录'
-        }
-      >
+            <div className="flex h-3 overflow-hidden rounded-full bg-zinc-100">
+              {([1, 2, 3, 4] as const).map((r) => {
+                const total = dist[1] + dist[2] + dist[3] + dist[4];
+                const pct = total ? (dist[r] / total) * 100 : 0;
+                const color = ['#ef4444', '#f59e0b', '#10b981', '#0ea5e9'][r - 1];
+                return (
+                  <span
+                    key={r}
+                    style={{ width: `${pct}%`, backgroundColor: color }}
+                    title={`${RATING_LABEL[r]} ${dist[r]}`}
+                  />
+                );
+              })}
+            </div>
+
+            <div className="mt-2 grid grid-cols-4 gap-1 text-center">
+              {([1, 2, 3, 4] as const).map((r) => (
+                <div key={r}>
+                  <div className="text-sm font-semibold tabular-nums text-zinc-900">{dist[r]}</div>
+                  <div className="text-[10px] text-zinc-400">{RATING_LABEL[r]}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-2.5 text-[11px]">
+              <span className="text-zinc-500">平均每题用时</span>
+              <span className="tabular-nums text-zinc-800">
+                {timeStats.avgMs > 0
+                  ? `${Math.round(timeStats.avgMs / 1000)} 秒`
+                  : '还没有计时数据'}
+              </span>
+            </div>
+            <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
+              刷得飞快但「忘记」多，多半是没想透；耗时很长却「记得」稳，说明这题值得保留。
+            </p>
+          </section>
+
+          <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <div className="mb-2 flex items-baseline justify-between">
+              <h2 className="text-sm font-medium text-zinc-800">回忆正确率</h2>
+              <span className="text-[10px] text-zinc-400">
+                {accTotals.total
+                  ? `近 30 天 ${accTotals.total} 次 · ${Math.round(overallAccuracy * 100)}%`
+                  : '还没有评分记录'}
+              </span>
+            </div>
         {accSubjects.length === 0 ? (
           <p className="py-4 text-center text-xs text-zinc-400">近 30 天还没有评分记录</p>
         ) : (
@@ -560,18 +740,11 @@ export default function StatsPage() {
         <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
           正确率 = 自评「记得 / 熟练」的次数占比；评「忘记 / 模糊」都算这次没回忆起来。
         </p>
-      </Collapsible>
+      </section>
 
-      <Collapsible
-        title="错因分布"
-        summary={
-          tagDist.length
-            ? `${tagDist[0].tag}最多（${tagDist[0].count} 题）· 共 ${tagDist.reduce((s, t) => s + t.count, 0)} 个标签`
-            : '还没有打错因标签'
-        }
-      >
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="mb-3 flex items-baseline justify-between">
-          <span className="text-[11px] text-zinc-400">按未掌握题目的标签统计</span>
+          <h2 className="text-sm font-medium text-zinc-800">错因分布</h2>
           <span className="text-[10px] text-zinc-400">
             共 {tagDist.reduce((s, t) => s + t.count, 0)} 个标签
           </span>
@@ -602,16 +775,18 @@ export default function StatsPage() {
             ))}
           </ul>
         )}
-      </Collapsible>
+      </section>
 
-      <Collapsible
-        title="章节掌握度"
-        summary={
-          mastery.length
-            ? `最弱：${mastery[0].chapterName} ${Math.round(mastery[0].retention * 100)}% · 可一键加练`
-            : '还没有错题'
-        }
-      >
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 className="text-sm font-medium text-zinc-800">章节掌握度</h2>
+          <span className="text-[10px] text-zinc-400">
+            {mastery.length
+              ? `最弱：${mastery[0].chapterName} ${Math.round(mastery[0].retention * 100)}%`
+              : '还没有错题'}
+          </span>
+        </div>
+
         <div className="no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
           <button
             type="button"
@@ -643,7 +818,7 @@ export default function StatsPage() {
           <p className="py-6 text-center text-xs text-zinc-400">这个科目还没有错题</p>
         ) : (
           <ul className="space-y-2.5">
-            {visibleMastery.map((m) => (
+            {masteryShown.map((m) => (
               <li key={m.chapterId} className="flex items-start gap-2">
                 <button
                   type="button"
@@ -692,11 +867,24 @@ export default function StatsPage() {
           </ul>
         )}
 
+        {visibleMastery.length > 8 && (
+          <button
+            type="button"
+            data-testid="mastery-show-all"
+            onClick={() => setShowAllMastery((v) => !v)}
+            className="mt-3 w-full rounded-lg bg-zinc-50 py-2 text-[11px] text-zinc-500 active:bg-zinc-100"
+          >
+            {showAllMastery ? '收起' : `展开全部 ${visibleMastery.length} 章`}
+          </button>
+        )}
+
         <p className="mt-3 text-[10px] leading-relaxed text-zinc-400">
           掌握度 = 该章节题目的平均记忆保持率（FSRS 预测「现在还记得」的概率），
           已标记掌握的题按 100% 计。点章节看错题，点「加练」把最弱的 5 道提前到今天。
         </p>
-      </Collapsible>
+      </section>
+        </>
+      )}
 
       <div className="h-2" />
     </div>

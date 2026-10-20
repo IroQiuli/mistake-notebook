@@ -132,6 +132,8 @@ await page.screenshot({ path: path.join(SHOTS, '70-home-plan.png'), fullPage: tr
 // ---- 统计图表 ----
 await page.goto(BASE + '/#/stats');
 await page.waitForTimeout(1200);
+await page.getByTestId('stats-view-charts').click();
+await page.waitForTimeout(400);
 
 for (const key of ['trend', 'accuracy', 'tags', 'mastery', 'volume']) {
   await page.getByTestId(`chart-${key}`).click();

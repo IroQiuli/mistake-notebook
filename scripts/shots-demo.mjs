@@ -191,15 +191,17 @@ await page.goto(BASE + '/#/stats');
 await page.waitForTimeout(1200);
 await page.screenshot({ path: path.join(OUT, 'doc-stats.png'), fullPage: true });
 
-// 图表区：切到「掌握程度」截一张
+// 图表视图
+await page.getByTestId('stats-view-charts').click();
+await page.waitForTimeout(400);
 await page.getByTestId('chart-mastery').click();
 await page.waitForTimeout(400);
 await page.screenshot({ path: path.join(OUT, 'doc-chart-mastery.png'), fullPage: true });
 
-await page.getByRole('button', { name: /回忆正确率/ }).click();
-await page.getByRole('button', { name: /章节掌握度/ }).click();
+// 深入分析视图
+await page.getByTestId('stats-view-deep').click();
 await page.waitForTimeout(500);
-await page.screenshot({ path: path.join(OUT, 'doc-stats-open.png'), fullPage: true });
+await page.screenshot({ path: path.join(OUT, 'doc-stats-deep.png'), fullPage: true });
 
 await page.goto(BASE + '/#/settings');
 await page.waitForTimeout(800);

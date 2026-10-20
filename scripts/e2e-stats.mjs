@@ -146,9 +146,9 @@ const heatCells = await page.locator('div[title*="次"]').count();
 const bars = await page.getByTestId('forecast').locator('div[style*="height"]').count();
 console.log('heat cells:', heatCells, '| forecast bars:', bars);
 
-// 章节掌握度默认收起，先展开
-await page.getByRole('button', { name: /章节掌握度/ }).click();
-await page.waitForTimeout(300);
+// 深入分析是独立视图，先切过去
+await page.getByTestId('stats-view-deep').click();
+await page.waitForTimeout(400);
 await page.getByRole('button', { name: '839 自控', exact: true }).click();
 await page.waitForTimeout(500);
 await page.screenshot({ path: path.join(SHOTS, '31-stats-subject.png'), fullPage: true });
@@ -166,9 +166,9 @@ await page.goto(BASE + '/#/stats');
 await page.waitForTimeout(600);
 await page.screenshot({ path: path.join(SHOTS, '32-stats-desktop.png'), fullPage: true });
 
-// 正确率按科目展开到章节（先展开折叠卡片）
-await page.getByRole('button', { name: /回忆正确率/ }).click();
-await page.waitForTimeout(300);
+// 正确率按科目展开到章节（深入分析视图里）
+await page.getByTestId('stats-view-deep').click();
+await page.waitForTimeout(400);
 await page.getByTestId('accuracy-subject').first().click();
 await page.waitForTimeout(400);
 await page.screenshot({ path: path.join(SHOTS, '34-accuracy-chapters.png'), fullPage: true });
