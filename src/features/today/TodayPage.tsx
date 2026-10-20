@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronRight, FileStack, Flame, Plus } from 'lucide-react';
 import { db, getSetting } from '../../storage/db';
 import { buildQueue } from '../../domain/queue';
-import { dayKey, formatToday, learningDayStart } from '../../domain/time';
+import { dayKey, formatToday, learningDayEnd, learningDayStart } from '../../domain/time';
 import { calcStreak, problemsDueOn } from '../../domain/stats';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
@@ -12,22 +12,22 @@ import { EmptyState } from '../../ui/EmptyState';
 import { cn } from '../../ui/cn';
 import { DetailDialog, type DetailMode } from './DetailDialog';
 
-function GoalRing({ done, goal }: { done: number; goal: number }) {
+function ProgressRing({ done, goal, size = 62 }: { done: number; goal: number; size?: number }) {
   const pct = Math.min(1, done / Math.max(1, goal));
-  const radius = 26;
+  const radius = size / 2 - 4;
   const circumference = 2 * Math.PI * radius;
   return (
-    <div className="relative h-16 w-16 shrink-0">
-      <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90">
-        <circle cx="32" cy="32" r={radius} fill="none" stroke="#e4e4e7" strokeWidth="6" />
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg viewBox={`0 0 ${size} ${size}`} className="-rotate-90" width={size} height={size}>
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#f4f4f5" strokeWidth="7" />
         {pct > 0 && (
           <circle
-            cx="32"
-            cy="32"
+            cx={size / 2}
+            cy={size / 2}
             r={radius}
             fill="none"
             stroke="#f97316"
-            strokeWidth="6"
+            strokeWidth="7"
             strokeLinecap="round"
             strokeDasharray={`${pct * circumference} ${circumference}`}
             className="transition-[stroke-dasharray] duration-500"
@@ -35,8 +35,8 @@ function GoalRing({ done, goal }: { done: number; goal: number }) {
         )}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-sm font-semibold tabular-nums text-zinc-900">{done}</span>
-        <span className="text-[9px] text-zinc-400">/ {goal}</span>
+        <span className="text-[13px] font-semibold tabular-nums text-zinc-900">{done}</span>
+        <span className="text-[9px] text-zinc-400">/{goal}</span>
       </div>
     </div>
   );
@@ -69,24 +69,31 @@ export default function TodayPage() {
     return out;
   }, [subjectGoals]);
 
-  const hasQuotas = Object.keys(quotas).length > 0;
-  const queue = useMemo(
-    () => buildQueue(problems, cards, { now, quotas: hasQuotas ? quotas : undefined }),
-    [problems, cards, now, quotas, hasQuotas]
+  const quotaSubjects = useMemo(
+    () => subjects.filter((s) => (quotas[s.id] ?? 0) > 0),
+    [subjects, quotas]
   );
-  const streak = calcStreak(logs, now);
 
+  /** 今天计划做几道：配了每科题量就按合计，否则用每日目标 */
+  const plan = useMemo(() => {
+    const sum = quotaSubjects.reduce((s, sub) => s + (quotas[sub.id] ?? 0), 0);
+    return sum > 0 ? sum : dailyGoal;
+  }, [quotaSubjects, quotas, dailyGoal]);
+
+  const queue = useMemo(
+    () =>
+      buildQueue(problems, cards, {
+        now,
+        quotas: quotaSubjects.length ? quotas : undefined,
+        limit: plan,
+      }),
+    [problems, cards, now, quotas, quotaSubjects.length, plan]
+  );
+
+  const streak = calcStreak(logs, now);
   const problemMap = useMemo(() => new Map(problems.map((p) => [p.id, p])), [problems]);
 
-  const perSubject = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const item of queue) {
-      map.set(item.problem.subjectId, (map.get(item.problem.subjectId) ?? 0) + 1);
-    }
-    return map;
-  }, [queue]);
-
-  /** 今天每个科目已经复习了几道（按科目统计评分次数） */
+  /** 今天每个科目已经写了几道 */
   const reviewedBySubject = useMemo(() => {
     const map = new Map<string, number>();
     const today = dayKey(now);
@@ -108,9 +115,14 @@ export default function TodayPage() {
   ).length;
   const activeCount = problems.filter((p) => !p.archivedAt).length;
 
-  const goalTotal = hasQuotas
-    ? Object.values(quotas).reduce((s, n) => s + Math.max(0, n), 0)
-    : dailyGoal;
+  /** 今天到期（含逾期）的总数，用来提示「还有多少顺延到明天」 */
+  const dueCount = useMemo(() => {
+    const end = learningDayEnd(now);
+    const active = new Set(problems.filter((p) => !p.archivedAt).map((p) => p.id));
+    return cards.filter((c) => active.has(c.problemId) && c.due <= end).length;
+  }, [problems, cards, now]);
+
+  const deferred = Math.max(0, dueCount - queue.length);
 
   const chapterMap = useMemo(() => new Map(chapters.map((c) => [c.id, c])), [chapters]);
   const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
@@ -118,8 +130,8 @@ export default function TodayPage() {
     () =>
       [
         { offset: 1, label: '明天' },
+        { offset: 2, label: '后天' },
         { offset: 3, label: '3 天后' },
-        { offset: 7, label: '7 天后' },
       ].map((u) => ({ ...u, list: problemsDueOn(problems, cards, u.offset, now) })),
     [problems, cards, now]
   );
@@ -128,21 +140,20 @@ export default function TodayPage() {
     ? Math.floor((learningDayStart(now) - learningDayStart(lastBackupAt)) / 86400000)
     : null;
   const needBackup = lastBackupAt === 0 || (backupDays ?? 0) >= 7;
-
-  const quotaSubjects = hasQuotas
-    ? subjects.filter((s) => (quotas[s.id] ?? 0) > 0)
-    : [];
+  const donePct = Math.min(1, todayReviewed / Math.max(1, plan));
 
   return (
     <div className="space-y-4">
       <header className="flex items-end justify-between pt-1">
         <div>
           <div className="text-xs text-zinc-500">{formatToday(now)}</div>
-          <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-zinc-900">今天要复习的</h1>
+          <h1 className="mt-0.5 text-[26px] font-semibold tracking-tight text-zinc-900">
+            今天要写的
+          </h1>
         </div>
         {streak > 0 && (
-          <div className="flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-600">
-            <Flame size={14} />
+          <div className="mb-1 flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-600">
+            <Flame size={13} />
             连续 {streak} 天
           </div>
         )}
@@ -161,27 +172,88 @@ export default function TodayPage() {
         </Link>
       )}
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5">
-        <div className="flex items-baseline gap-2">
-          <span data-testid="queue-count" className="text-4xl font-semibold tabular-nums text-zinc-900">
-            {queue.length}
-          </span>
-          <span className="text-sm text-zinc-500">道待复习</span>
+      {/* 今日计划卡 */}
+      <section className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+        <div
+          className="pointer-events-none absolute -right-12 -top-16 h-40 w-40 rounded-full opacity-70"
+          style={{ background: 'radial-gradient(circle, #ffedd5 0%, rgba(255,255,255,0) 70%)' }}
+        />
+        <div className="relative flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span
+                data-testid="queue-count"
+                className="text-[44px] font-semibold leading-none tracking-tight tabular-nums text-zinc-900"
+              >
+                {queue.length}
+              </span>
+              <span className="text-sm text-zinc-500">道</span>
+            </div>
+            <div className="mt-1.5 text-sm text-zinc-600">今天要写</div>
+            <div className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+              {deferred > 0 ? (
+                <>
+                  另有 {deferred} 道到期，顺延到明天
+                  {quotaSubjects.length > 0 && '（超出每科题量的部分）'}
+                </>
+              ) : dueCount === 0 ? (
+                '今天没有到期的题'
+              ) : (
+                `今天到期 ${dueCount} 道`
+              )}
+            </div>
+          </div>
+          <ProgressRing done={todayReviewed} goal={plan} size={66} />
         </div>
 
+        {queue.length > 0 ? (
+          <div className="mt-4 flex gap-2">
+            <Button
+              variant="primary"
+              size="xl"
+              className="flex-1"
+              onClick={() => navigate('/review')}
+            >
+              开始写
+            </Button>
+            <Button size="xl" onClick={() => navigate('/paper')} aria-label="组一套卷">
+              <FileStack size={18} />
+              组卷
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-4 flex gap-2">
+            <Button
+              variant="primary"
+              size="lg"
+              className="flex-1"
+              onClick={() => navigate('/capture')}
+            >
+              录一道错题
+            </Button>
+            <Button size="lg" onClick={() => navigate('/paper')}>
+              <FileStack size={16} />
+              组卷
+            </Button>
+          </div>
+        )}
+
         {quotaSubjects.length > 0 && (
-          <div className="mt-3 space-y-1.5 rounded-xl bg-zinc-50 px-3 py-2.5">
+          <div className="mt-4 space-y-1.5 border-t border-zinc-100 pt-3">
             {quotaSubjects.map((s) => {
               const done = reviewedBySubject.get(s.id) ?? 0;
               const goal = quotas[s.id] ?? 0;
               const pct = Math.min(1, done / Math.max(1, goal));
               return (
                 <div key={s.id} className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-                  <span className="w-20 shrink-0 truncate text-[11px] text-zinc-600">
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: s.color }}
+                  />
+                  <span className="w-[76px] shrink-0 truncate text-[11px] text-zinc-600">
                     {s.name.replace('839 自动控制原理及过程控制', '839 自控')}
                   </span>
-                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200">
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-100">
                     <span
                       className="block h-full rounded-full transition-[width]"
                       style={{
@@ -203,65 +275,27 @@ export default function TodayPage() {
             })}
           </div>
         )}
-
-        {queue.length > 0 ? (
-          <div className="mt-4 flex gap-2">
-            <Button variant="primary" size="xl" className="flex-1" onClick={() => navigate('/review')}>
-              开始复习
-            </Button>
-            <Button size="xl" onClick={() => navigate('/paper')} aria-label="组一套卷">
-              <FileStack size={18} />
-              组卷
-            </Button>
-          </div>
-        ) : (
-          <div className="mt-4 rounded-xl bg-zinc-50 py-6 text-center">
-            <p className="text-sm text-zinc-500">今天没有到期的错题</p>
-            <div className="mt-3 flex justify-center gap-2">
-              <Button variant="primary" size="md" onClick={() => navigate('/capture')}>
-                去录一道错题
-              </Button>
-              <Button size="md" onClick={() => navigate('/paper')}>
-                <FileStack size={16} />
-                组一套卷
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {queue.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {subjects
-              .filter((s) => (perSubject.get(s.id) ?? 0) > 0)
-              .map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => navigate(`/review?subject=${s.id}`)}
-                  className="flex items-center gap-1.5 rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 active:bg-zinc-50"
-                >
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: s.color }}
-                    aria-hidden
-                  />
-                  {s.name.replace('839 自动控制原理及过程控制', '839 自控')}
-                  <span className="tabular-nums text-zinc-400">{perSubject.get(s.id)}</span>
-                </button>
-              ))}
-          </div>
-        )}
       </section>
 
-      <section className="flex items-center gap-4 rounded-2xl border border-zinc-200 bg-white px-4 py-3">
-        <GoalRing done={todayReviewed} goal={goalTotal} />
+      {/* 今日完成度 */}
+      <section className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3">
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium text-zinc-800">今日目标</div>
-          <div className="mt-0.5 text-[11px] text-zinc-500">
-            {todayReviewed >= goalTotal
-              ? `已完成，多做了 ${todayReviewed - goalTotal} 题`
-              : `还差 ${goalTotal - todayReviewed} 题`}
-            {hasQuotas && <span className="text-zinc-400"> · 各科合计</span>}
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm font-medium text-zinc-800">今日进度</span>
+            <span className="text-[11px] text-zinc-400">
+              {todayReviewed >= plan
+                ? `已完成，多写了 ${todayReviewed - plan} 道`
+                : `还差 ${plan - todayReviewed} 道`}
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100">
+            <div
+              className="h-full rounded-full bg-orange-500 transition-[width] duration-500"
+              style={{ width: `${donePct * 100}%` }}
+            />
+          </div>
+          <div className="mt-1.5 text-[10px] text-zinc-400">
+            今日计划 {plan} 道 · 已写 {todayReviewed} 道
           </div>
         </div>
         <Link to="/settings" className="shrink-0 text-[11px] text-zinc-400">
@@ -272,7 +306,7 @@ export default function TodayPage() {
       <section className="grid grid-cols-3 gap-2.5">
         {(
           [
-            { key: 'today', label: '今日已复习', value: todayReviewed },
+            { key: 'today', label: '今日已写', value: todayReviewed },
             { key: 'week', label: '近 7 天', value: weekReviewed },
             { key: 'active', label: '未掌握', value: activeCount },
           ] as const
@@ -294,7 +328,7 @@ export default function TodayPage() {
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-zinc-700">接下来</h2>
+          <h2 className="text-sm font-medium text-zinc-700">接下来 3 天</h2>
           <Link to="/library" className="text-xs text-zinc-400">
             全部错题
           </Link>
@@ -338,12 +372,12 @@ export default function TodayPage() {
       <Dialog
         open={openOffset !== null}
         onClose={() => setOpenOffset(null)}
-        title={openOffset !== null ? `${openOffset} 天后要复习的错题` : ''}
+        title={openOffset !== null ? `${upcoming.find((u) => u.offset === openOffset)?.label ?? ''}要写的错题` : ''}
         size="md"
       >
         {openOffset !== null && (
           <div className="space-y-2">
-            {problemsDueOn(problems, cards, openOffset, now).map((p) => {
+            {(upcoming.find((u) => u.offset === openOffset)?.list ?? []).map((p) => {
               const chapter = chapterMap.get(p.chapterId);
               return (
                 <Link
@@ -368,14 +402,14 @@ export default function TodayPage() {
                 </Link>
               );
             })}
-            {problemsDueOn(problems, cards, openOffset, now).length === 0 && (
+            {(upcoming.find((u) => u.offset === openOffset)?.list ?? []).length === 0 && (
               <p className="py-4 text-center text-xs text-zinc-400">这一天没有到期的错题</p>
             )}
           </div>
         )}
       </Dialog>
 
-      <footer className={cn('pt-2 text-center text-[11px] leading-relaxed text-zinc-400')}>
+      <footer className="pt-2 text-center text-[11px] leading-relaxed text-zinc-400">
         数据只保存在这台设备的浏览器里
         <br />在「我的」里可以导出备份
       </footer>

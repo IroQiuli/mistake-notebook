@@ -1,4 +1,4 @@
-import type { Card, Chapter, Problem, ReviewLog } from './types';
+import type { Card, Chapter, Problem, ReviewLog, Subject } from './types';
 import { dayKey, learningDayStart } from './time';
 import { retrievability } from './scheduler';
 
@@ -278,4 +278,52 @@ export function errorTagDistribution(problems: Problem[]): { tag: string; count:
     const card = cardMap.get(p.id);
     return Boolean(card && card.due >= dayStart && card.due < dayEnd);
   });
+}
+
+export interface MasteryBucket {
+  level: 1 | 2 | 3 | 4 | 'none';
+  count: number;
+}
+
+/** 掌握程度分布：四档 + 未分级，只统计未归档的题 */
+export function masteryDistribution(problems: Problem[]): MasteryBucket[] {
+  const buckets: MasteryBucket[] = [
+    { level: 1, count: 0 },
+    { level: 2, count: 0 },
+    { level: 3, count: 0 },
+    { level: 4, count: 0 },
+    { level: 'none', count: 0 },
+  ];
+  const index = new Map(buckets.map((b) => [b.level, b]));
+  for (const p of problems) {
+    if (p.archivedAt) continue;
+    const key = (p.mastery ?? 'none') as MasteryBucket['level'];
+    const bucket = index.get(key);
+    if (bucket) bucket.count++;
+  }
+  return buckets;
+}
+
+export interface VolumeBucket {
+  subjectId: string;
+  name: string;
+  color: string;
+  count: number;
+}
+
+/** 各科目未归档题量，按数量降序 */
+export function subjectVolume(problems: Problem[], subjects: Subject[]): VolumeBucket[] {
+  const counts = new Map<string, number>();
+  for (const p of problems) {
+    if (p.archivedAt) continue;
+    counts.set(p.subjectId, (counts.get(p.subjectId) ?? 0) + 1);
+  }
+  return subjects
+    .map((s) => ({
+      subjectId: s.id,
+      name: s.name.replace('839 自动控制原理及过程控制', '839 自控'),
+      color: s.color,
+      count: counts.get(s.id) ?? 0,
+    }))
+    .sort((a, b) => b.count - a.count);
 }

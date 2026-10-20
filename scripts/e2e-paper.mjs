@@ -173,9 +173,9 @@ check(
 await page.screenshot({ path: path.join(SHOTS, '40-today-quota.png'), fullPage: true });
 
 // ---- 首页卡片点开细看 ----
-await page.getByRole('button', { name: /今日已复习/ }).click();
+await page.getByRole('button', { name: /今日已写/ }).click();
 await page.waitForTimeout(400);
-check('今日已复习弹窗', (await page.getByRole('dialog').getByText('复习过的题').count()) > 0);
+check('今日已写弹窗', (await page.getByRole('dialog').getByText('复习过的题').count()) > 0);
 check('弹窗里有逐题记录', (await page.getByRole('dialog').getByText('函数、极限与连续').count()) > 0);
 await page.screenshot({ path: path.join(SHOTS, '41-today-detail.png') });
 await page.getByRole('button', { name: '关闭' }).click();

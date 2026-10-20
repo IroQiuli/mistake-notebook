@@ -14,7 +14,7 @@ import StatsPage from './features/stats/StatsPage';
 import PaperPage from './features/paper/PaperPage';
 
 const NAV = [
-  { to: '/', label: '今日', icon: CalendarDays },
+  { to: '/', label: '首页', icon: CalendarDays },
   { to: '/library', label: '错题本', icon: Layers },
   { to: '/capture', label: '录入', icon: Plus },
   { to: '/stats', label: '统计', icon: BarChart3 },

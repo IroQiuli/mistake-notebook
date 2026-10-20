@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, ChevronDown } from 'lucide-react';
+import { BarChart3, ChevronDown, Download, FileSpreadsheet } from 'lucide-react';
 import { db } from '../../storage/db';
 import { Collapsible } from '../../ui/Collapsible';
+import { Donut, HBars, LineChart, VBars } from '../../ui/charts';
+import { downloadChartPng, downloadCsv } from '../../lib/exportChart';
 import {
   accuracyByChapter,
   accuracyBySubject,
@@ -12,10 +14,12 @@ import {
   dailyCounts,
   errorTagDistribution,
   forecast,
+  masteryDistribution,
   overallRetention,
   ratingDistribution,
+  subjectVolume,
 } from '../../domain/stats';
-import { ERROR_TAG_COLORS } from '../../domain/taxonomy';
+import { ERROR_TAG_COLORS, MASTERY_LEVELS, MASTERY_UNSET_COLOR } from '../../domain/taxonomy';
 import { practiceChapter } from '../../storage/problems';
 import { useToast } from '../../ui/Toast';
 import { learningDayStart } from '../../domain/time';
@@ -24,6 +28,16 @@ import { EmptyState } from '../../ui/EmptyState';
 
 const WEEKS = 16;
 const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+
+type ChartKey = 'trend' | 'accuracy' | 'tags' | 'mastery' | 'volume';
+
+const CHARTS: { key: ChartKey; label: string; hint: string }[] = [
+  { key: 'trend', label: '复习趋势', hint: '最近 14 天每天复习了几次，看节奏有没有断' },
+  { key: 'accuracy', label: '科目正确率', hint: '近 30 天「记得 + 熟练」的占比，越低越该补' },
+  { key: 'tags', label: '错因分布', hint: '未掌握题目上的标签构成，看是算错还是不会' },
+  { key: 'mastery', label: '掌握程度', hint: '四档分布，深色越多说明没底气的题越多' },
+  { key: 'volume', label: '科目题量', hint: '各科未掌握的题量占比' },
+];
 
 function heatLevel(n: number): string {
   if (n === 0) return 'bg-zinc-100';
@@ -181,6 +195,9 @@ export default function StatsPage() {
   );
   const streak = useMemo(() => calcStreak(logs, now), [logs, now]);
   const tagDist = useMemo(() => errorTagDistribution(problems), [problems]);
+  const masteryDist = useMemo(() => masteryDistribution(problems), [problems]);
+  const volume = useMemo(() => subjectVolume(problems, subjects), [problems, subjects]);
+  const trend14 = useMemo(() => dailyCounts(logs, now, 14), [logs, now]);
 
   const accSubjects = useMemo(
     () => accuracyBySubject(logs, problems, subjects, since30),
@@ -202,6 +219,149 @@ export default function StatsPage() {
   const visibleMastery = mastery.filter((m) => !subjectFilter || m.subjectId === subjectFilter);
   const activeCount = problems.filter((p) => !p.archivedAt).length;
   const dueToday = forecastDays[0]?.count ?? 0;
+
+  const [chart, setChart] = useState<ChartKey>('trend');
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  const chartData = useMemo(() => {
+    const stamp = new Date(now).toISOString().slice(0, 10).replace(/-/g, '');
+    switch (chart) {
+      case 'accuracy':
+        return {
+          file: `cuotiben-accuracy-${stamp}`,
+          rows: [
+            ['科目', '正确率(%)', '评分次数'],
+            ...accSubjects.map((s) => [
+              s.name.replace('839 自动控制原理及过程控制', '839 自控'),
+              Math.round(s.rate * 100),
+              s.total,
+            ]),
+          ] as (string | number)[][],
+        };
+      case 'tags':
+        return {
+          file: `cuotiben-error-tags-${stamp}`,
+          rows: [['错因', '题数'], ...tagDist.map((t) => [t.tag, t.count])] as (string | number)[][],
+        };
+      case 'mastery':
+        return {
+          file: `cuotiben-mastery-${stamp}`,
+          rows: [
+            ['掌握程度', '题数'],
+            ...masteryDist.map((b) => [
+              b.level === 'none'
+                ? '未分级'
+                : (MASTERY_LEVELS.find((m) => m.level === b.level)?.label ?? ''),
+              b.count,
+            ]),
+          ] as (string | number)[][],
+        };
+      case 'volume':
+        return {
+          file: `cuotiben-subjects-${stamp}`,
+          rows: [['科目', '未掌握题数'], ...volume.map((v) => [v.name, v.count])] as (
+            | string
+            | number
+          )[][],
+        };
+      default:
+        return {
+          file: `cuotiben-trend-${stamp}`,
+          rows: [
+            ['日期', '复习次数'],
+            ...trend14.map((d) => [new Date(d.ts).toISOString().slice(0, 10), d.count]),
+          ] as (string | number)[][],
+        };
+    }
+  }, [chart, accSubjects, tagDist, masteryDist, volume, trend14, now]);
+
+  const exportPng = async () => {
+    const svg = chartRef.current?.querySelector('svg');
+    if (!svg) {
+      toast.show('这个图表没有图形可导出，用 CSV 吧', 'error');
+      return;
+    }
+    try {
+      await downloadChartPng(svg, `${chartData.file}.png`);
+      toast.show('已导出 PNG', 'success');
+    } catch (err) {
+      console.error(err);
+      toast.show('导出失败，试试 CSV', 'error');
+    }
+  };
+
+  const exportCsvFile = () => {
+    downloadCsv(chartData.rows, `${chartData.file}.csv`);
+    toast.show('已导出 CSV', 'success');
+  };
+
+  const chartNode = () => {
+    switch (chart) {
+      case 'accuracy':
+        return accSubjects.length === 0 ? (
+          <p className="py-8 text-center text-xs text-zinc-400">近 30 天还没有评分记录</p>
+        ) : (
+          <HBars
+            unit="%"
+            items={accSubjects.map((s) => ({
+              label: s.name.replace('839 自动控制原理及过程控制', '839 自控'),
+              value: Math.round(s.rate * 100),
+              color: s.color ?? '#f97316',
+            }))}
+          />
+        );
+      case 'tags':
+        return tagDist.length === 0 ? (
+          <p className="py-8 text-center text-xs text-zinc-400">还没有打错因标签</p>
+        ) : (
+          <Donut
+            items={tagDist.map((t) => ({
+              label: t.tag,
+              value: t.count,
+              color: ERROR_TAG_COLORS[t.tag] ?? '#f97316',
+            }))}
+            centerLabel="错因标签"
+            centerValue={String(tagDist.reduce((s, t) => s + t.count, 0))}
+          />
+        );
+      case 'mastery': {
+        const items = masteryDist.map((b) => {
+          const meta = MASTERY_LEVELS.find((m) => m.level === b.level);
+          return {
+            label: meta?.label ?? '未分级',
+            value: b.count,
+            color: meta?.color ?? MASTERY_UNSET_COLOR,
+          };
+        });
+        return items.every((i) => i.value === 0) ? (
+          <p className="py-8 text-center text-xs text-zinc-400">还没有分级</p>
+        ) : (
+          <VBars items={items} />
+        );
+      }
+      case 'volume':
+        return volume.every((v) => v.count === 0) ? (
+          <p className="py-8 text-center text-xs text-zinc-400">还没有错题</p>
+        ) : (
+          <Donut
+            items={volume
+              .filter((v) => v.count > 0)
+              .map((v) => ({ label: v.name, value: v.count, color: v.color }))}
+            centerLabel="未掌握"
+            centerValue={String(volume.reduce((s, v) => s + v.count, 0))}
+          />
+        );
+      default:
+        return (
+          <LineChart
+            points={trend14.map((d) => ({
+              label: String(new Date(d.ts).getDate()),
+              value: d.count,
+            }))}
+          />
+        );
+    }
+  };
 
   if (problems.length === 0) {
     return (
@@ -247,6 +407,58 @@ export default function StatsPage() {
       <Heatmap counts={counts} />
 
       <Forecast days={forecastDays} onPick={() => navigate('/review')} />
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-medium text-zinc-800">统计图表</h2>
+            <p className="mt-0.5 text-[10px] text-zinc-400">换一种看法，或导出成图片 / 表格</p>
+          </div>
+          <div className="flex shrink-0 gap-1.5">
+            <button
+              type="button"
+              onClick={() => void exportPng()}
+              className="flex items-center gap-1 rounded-lg border border-zinc-200 px-2 py-1 text-[11px] text-zinc-600 active:bg-zinc-50"
+            >
+              <Download size={12} />
+              PNG
+            </button>
+            <button
+              type="button"
+              onClick={exportCsvFile}
+              className="flex items-center gap-1 rounded-lg border border-zinc-200 px-2 py-1 text-[11px] text-zinc-600 active:bg-zinc-50"
+            >
+              <FileSpreadsheet size={12} />
+              CSV
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {CHARTS.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              data-testid={`chart-${c.key}`}
+              onClick={() => setChart(c.key)}
+              className={cn(
+                'shrink-0 rounded-full px-2.5 py-1 text-[11px] transition-colors',
+                chart === c.key ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500'
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        <div ref={chartRef} className="mt-3">
+          {chartNode()}
+        </div>
+
+        <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
+          {CHARTS.find((c) => c.key === chart)?.hint}
+        </p>
+      </section>
 
       <div className="flex items-center gap-2 pt-1">
         <span className="h-px flex-1 bg-zinc-200" />

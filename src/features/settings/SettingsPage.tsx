@@ -454,7 +454,7 @@ export default function SettingsPage() {
 
       <Section title="关于">
         <div className="space-y-1.5 text-xs leading-relaxed text-zinc-500">
-          <p>错题簿 v0.4.0 · 本地优先的考研错题复习工具</p>
+          <p>错题簿 v0.5.0 · 本地优先的考研错题复习工具</p>
           <p>排期算法：FSRS-5，目标保留率 90%</p>
           <p>学习日边界：每天 04:00（凌晨复习算前一天）</p>
           <p>备份加密：PBKDF2-SHA256（60 万次迭代）+ AES-256-GCM</p>

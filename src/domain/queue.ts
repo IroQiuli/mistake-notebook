@@ -15,6 +15,11 @@ export interface QueueOptions {
    * - 数量为 0：今天不做这一科
    */
   quotas?: Record<string, number>;
+  /**
+   * 今日队列总量上限：没配每科题量时用它把「今天要写的」压在目标以内，
+   * 超出的到期题顺延到明天（不会丢，只是不进今天的队列）。
+   */
+  limit?: number;
 }
 
 export interface QueueItem {
@@ -26,7 +31,7 @@ export interface QueueItem {
 }
 
 export function buildQueue(problems: Problem[], cards: Card[], opts: QueueOptions): QueueItem[] {
-  const { now, newLimit = 30, subjectId, interleave = true, quotas } = opts;
+  const { now, newLimit = 30, subjectId, interleave = true, quotas, limit } = opts;
   const end = learningDayEnd(now);
   const cardMap = new Map(cards.map((c) => [c.problemId, c]));
 
@@ -56,7 +61,10 @@ export function buildQueue(problems: Problem[], cards: Card[], opts: QueueOption
   const duePool = [...due, ...limitedFresh];
 
   const hasQuotas = quotas && Object.keys(quotas).length > 0;
-  const all = hasQuotas ? applyQuotas(duePool, later, quotas) : duePool;
+  let all = hasQuotas ? applyQuotas(duePool, later, quotas) : duePool;
+  if (limit && limit > 0 && all.length > limit) {
+    all = all.slice(0, limit);
+  }
 
   return interleave ? interleaveBySubject(all) : all;
 }
