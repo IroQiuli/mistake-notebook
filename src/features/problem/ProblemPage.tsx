@@ -28,6 +28,7 @@ import { MASTERY_LEVELS, masteryLevel, masteryTextColor } from '../../domain/tax
 import { weightLabel, weightOf } from '../../domain/weight';
 import { displayTitle } from '../../domain/title';
 import { useAssetUrl } from '../../hooks/useAssetUrl';
+import { useBack } from '../../hooks/useBack';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import { EmptyState } from '../../ui/EmptyState';
@@ -52,6 +53,7 @@ export default function ProblemPage() {
   const navigate = useNavigate();
   const toast = useToast();
 
+  const back = useBack('/search');
   const problem = useLiveQuery(() => db.problems.get(id), [id]);
   const card = useLiveQuery(() => db.cards.get(id), [id]);
   const chapter = useLiveQuery(
@@ -182,7 +184,7 @@ export default function ProblemPage() {
       <div className="flex items-center justify-between pt-1">
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={back}
           className="-ml-2 flex h-10 items-center gap-1 rounded-lg px-2 text-zinc-600 active:bg-zinc-100"
           aria-label="返回上一页"
         >
@@ -611,7 +613,7 @@ export default function ProblemPage() {
             onClick={async () => {
               await deleteProblem(problem.id);
               toast.show('已删除', 'info');
-              navigate('/library', { replace: true });
+              back();
             }}
           >
             删除

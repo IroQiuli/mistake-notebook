@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAssetUrl } from '../../hooks/useAssetUrl';
 import { formatDue } from '../../domain/time';
 import { masteryColor, masteryLevel } from '../../domain/taxonomy';
@@ -18,6 +18,8 @@ interface ProblemRowProps {
 }
 
 export function ProblemRow({ problem, chapter, topics, card, subjectColor, now }: ProblemRowProps) {
+  const location = useLocation();
+  const from = location.pathname + location.search;
   const url = useAssetUrl(problem.thumbAssetId ?? problem.stemAssetId);
   const level = masteryLevel(problem.mastery);
   const barColor = problem.archivedAt ? '#10b981' : level ? level.color : masteryColor(undefined);
@@ -25,6 +27,7 @@ export function ProblemRow({ problem, chapter, topics, card, subjectColor, now }
   return (
     <Link
       to={`/problem/${problem.id}`}
+      state={{ from }}
       className="flex gap-3 rounded-xl border border-l-[3px] border-zinc-200 bg-white p-2.5 active:bg-zinc-50"
       style={{ borderLeftColor: barColor }}
       title={`掌握程度：${level?.label ?? '未分级'}`}

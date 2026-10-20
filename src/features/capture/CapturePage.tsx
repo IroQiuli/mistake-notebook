@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Camera, FileText, Image as ImageIcon, SlidersHorizontal } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
@@ -9,6 +8,7 @@ import { createProblem } from '../../storage/problems';
 import { setSetting } from '../../storage/db';
 import { Cropper } from './Cropper';
 import { ProblemForm } from './ProblemForm';
+import { useBack, useGo } from '../../hooks/useBack';
 import { defaultMeta } from './defaultMeta';
 import { PdfPicker } from './PdfPicker';
 import { loadPdf, type PdfDoc } from './pdf';
@@ -42,7 +42,8 @@ interface Crop {
 }
 
 export default function CapturePage() {
-  const navigate = useNavigate();
+  const back = useBack('/');
+  const go = useGo();
   const toast = useToast();
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -335,11 +336,11 @@ export default function CapturePage() {
           <Button variant="primary" block size="lg" onClick={reset}>
             继续录下一题
           </Button>
-          <Button block size="lg" disabled={!savedId} onClick={() => navigate(`/problem/${savedId}`)}>
+          <Button block size="lg" disabled={!savedId} onClick={() => go(`/problem/${savedId}`)}>
             查看这道题
           </Button>
-          <Button variant="ghost" block onClick={() => navigate('/')}>
-            回到今日
+          <Button variant="ghost" block onClick={back}>
+            返回上一页
           </Button>
         </div>
       )}

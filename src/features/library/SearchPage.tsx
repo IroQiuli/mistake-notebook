@@ -9,7 +9,9 @@ import {
   isRealExam,
   type ProblemFilter,
 } from '../../domain/filter';
+import { filterToParams, paramsToFilter } from '../../domain/url';
 import { learningDayEnd } from '../../domain/time';
+import { useBack } from '../../hooks/useBack';
 import { Button } from '../../ui/Button';
 import { EmptyState } from '../../ui/EmptyState';
 import { PageLoading } from '../../ui/Spinner';
@@ -19,22 +21,20 @@ import { FilterBar } from './FilterBar';
 
 /** 筛选结果页：从错题本目录点「筛选」进来，平铺展示所有命中的题 */
 export default function SearchPage() {
+  const back = useBack('/library');
   const navigate = useNavigate();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const problems = useLiveQuery(() => db.problems.toArray(), [], []);
   const chapters = useLiveQuery(() => db.chapters.toArray(), [], []);
   const topics = useLiveQuery(() => db.topics.toArray(), [], []);
   const cards = useLiveQuery(() => db.cards.toArray(), [], []);
   const subjects = useLiveQuery(() => db.subjects.orderBy('order').toArray(), [], []);
 
-  const initialChapter = params.get('chapter');
-  const [filter, setFilter] = useState<ProblemFilter>(
-    initialChapter ? { chapterIds: [initialChapter] } : {}
-  );
-  const [subjectId, setSubjectId] = useState<string | undefined>(
-    params.get('subject') ?? undefined
-  );
-  const [keyword, setKeyword] = useState(params.get('q') ?? '');
+  // 筛选条件完全由 URL 决定：从详情页返回、刷新页面都不会丢
+  const filter = useMemo(() => paramsToFilter(params), [params]);
+  const subjectId = filter.subjectId;
+  const keyword = filter.keyword ?? '';
+  const applyFilter = (next: ProblemFilter) => setParams(filterToParams(next), { replace: true });
   const [filterOpen, setFilterOpen] = useState(false);
   const now = Date.now();
 
@@ -93,7 +93,7 @@ export default function SearchPage() {
       <header className="flex items-center gap-2 pt-1">
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={back}
           className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 active:bg-zinc-100"
           aria-label="返回"
         >
@@ -115,14 +115,14 @@ export default function SearchPage() {
       <div className="flex gap-2">
         <input
           value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
+          onChange={(e) => applyFilter({ ...filter, keyword: e.target.value })}
           placeholder="搜标题、错误原因、来源、章节、标签"
           className="h-10 flex-1 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none placeholder:text-zinc-400 focus:border-orange-300"
         />
         {keyword && (
           <button
             type="button"
-            onClick={() => setKeyword('')}
+            onClick={() => applyFilter({ ...filter, keyword: undefined })}
             className="rounded-xl border border-zinc-200 px-3 text-xs text-zinc-500"
           >
             清空
@@ -133,10 +133,7 @@ export default function SearchPage() {
       <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
         <button
           type="button"
-          onClick={() => {
-            setSubjectId(undefined);
-            setFilter((f) => ({ ...f, chapterIds: [] }));
-          }}
+          onClick={() => applyFilter({ ...filter, subjectId: undefined, chapterIds: [] })}
           className={cn(
             'shrink-0 rounded-full px-3 py-1.5 text-xs',
             !subjectId ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-600 ring-1 ring-zinc-200'
@@ -148,10 +145,7 @@ export default function SearchPage() {
           <button
             key={s.id}
             type="button"
-            onClick={() => {
-              setSubjectId(s.id);
-              setFilter((f) => ({ ...f, chapterIds: [] }));
-            }}
+            onClick={() => applyFilter({ ...filter, subjectId: s.id, chapterIds: [] })}
             className={cn(
               'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs',
               subjectId === s.id
@@ -166,7 +160,9 @@ export default function SearchPage() {
         <button
           type="button"
           data-testid="quick-key-only"
-          onClick={() => setFilter((f) => ({ ...f, mastery: f.mastery?.length ? [] : [1, 2] }))}
+          onClick={() =>
+            applyFilter({ ...filter, mastery: filter.mastery?.length ? [] : [1, 2] })
+          }
           className={cn(
             'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs',
             filter.mastery?.length ? 'text-white' : 'bg-white text-zinc-600 ring-1 ring-zinc-200'
@@ -191,11 +187,7 @@ export default function SearchPage() {
             action={
               activeCount > 0 ? (
                 <Button
-                  onClick={() => {
-                    setFilter({});
-                    setKeyword('');
-                    setSubjectId(undefined);
-                  }}
+                  onClick={() => setParams(new URLSearchParams(), { replace: true })}
                 >
                   清空筛选
                 </Button>
@@ -227,7 +219,7 @@ export default function SearchPage() {
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
         value={filter}
-        onApply={setFilter}
+        onApply={applyFilter}
         subjects={subjects}
         chapters={chapters}
         topics={topics}

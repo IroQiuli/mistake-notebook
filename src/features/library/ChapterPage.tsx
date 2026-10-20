@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react';
 import { db } from '../../storage/db';
 import { useAssetUrl } from '../../hooks/useAssetUrl';
+import { useBack, useGo } from '../../hooks/useBack';
 import { displayTitle } from '../../domain/title';
 import { weightLabel, weightOf } from '../../domain/weight';
 import { masteryLevel } from '../../domain/taxonomy';
@@ -109,6 +110,9 @@ function SlideCard({
 export default function ChapterPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const back = useBack('/library');
+  const openProblem = useGo();
+  const [params, setParams] = useSearchParams();
   const problems = useLiveQuery(
     () => db.problems.where('chapterId').equals(id).toArray(),
     [id],
@@ -116,8 +120,8 @@ export default function ChapterPage() {
   );
   const chapter = useLiveQuery(() => db.chapters.get(id), [id]);
   const cards = useLiveQuery(() => db.cards.toArray(), [], []);
-  const [index, setIndex] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
+  const lastScrollAt = useRef(0);
   const now = Date.now();
 
   const list = useMemo(
@@ -126,16 +130,32 @@ export default function ChapterPage() {
   );
   const cardMap = useMemo(() => new Map(cards.map((c) => [c.problemId, c])), [cards]);
 
+  // 当前是第几张，存在 URL 里（?i=2），返回时能回到同一张
+  const rawIndex = Number(params.get('i') ?? 0);
+  const index = Number.isFinite(rawIndex)
+    ? Math.min(Math.max(0, Math.round(rawIndex)), Math.max(0, list.length - 1))
+    : 0;
+
   useEffect(() => {
-    setIndex(0);
-    scroller.current?.scrollTo({ left: 0 });
-  }, [id]);
+    const el = scroller.current;
+    if (!el) return;
+    el.scrollTo({ left: index * el.clientWidth });
+    // 只在切换章节 / 题目数量变化时定位，避免和滚动回调互相打架
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, list.length, chapter?.id]);
 
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
     const next = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
-    setIndex(Math.min(list.length - 1, Math.max(0, next)));
+    if (next === index) return;
+    const at = Date.now();
+    if (at - lastScrollAt.current < 120) return;
+    lastScrollAt.current = at;
+    const p = new URLSearchParams(params);
+    if (next > 0) p.set('i', String(next));
+    else p.delete('i');
+    setParams(p, { replace: true });
   };
 
   const go = (delta: number) => {
@@ -152,7 +172,7 @@ export default function ChapterPage() {
       <header className="flex items-center justify-between px-3 py-2">
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={back}
           className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 active:bg-zinc-100"
           aria-label="返回"
         >
@@ -200,7 +220,7 @@ export default function ChapterPage() {
                 chapterName={chapter.name}
                 card={cardMap.get(p.id)}
                 now={now}
-                onOpen={() => navigate(`/problem/${p.id}`)}
+                onOpen={() => openProblem(`/problem/${p.id}`)}
               />
             ))}
           </div>

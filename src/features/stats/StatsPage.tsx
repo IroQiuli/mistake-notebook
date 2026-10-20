@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from 'react-router-dom';
+import { useGo } from '../../hooks/useBack';
 import { BarChart3, ChevronDown, Download, FileSpreadsheet } from 'lucide-react';
 import { db } from '../../storage/db';
 import { Donut, HBars, LineChart, VBars } from '../../ui/charts';
@@ -178,6 +179,7 @@ function Forecast({
 
 export default function StatsPage() {
   const navigate = useNavigate();
+  const go = useGo();
   const toast = useToast();
   const logs = useLiveQuery(() => db.reviewLogs.toArray(), [], []);
   const problems = useLiveQuery(() => db.problems.toArray(), [], []);
@@ -822,7 +824,7 @@ export default function StatsPage() {
               <li key={m.chapterId} className="flex items-start gap-2">
                 <button
                   type="button"
-                  onClick={() => navigate(`/chapter/${m.chapterId}`)}
+                  onClick={() => go(`/chapter/${m.chapterId}`)}
                   className="min-w-0 flex-1 text-left"
                 >
                   <div className="flex items-baseline justify-between gap-2">

@@ -1,9 +1,18 @@
-import { HashRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import {
+  HashRouter,
+  Navigate,
+  NavLink,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigationType,
+} from 'react-router-dom';
 import { BarChart3, CalendarDays, Layers, Plus, Settings } from 'lucide-react';
 import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getSetting } from './storage/db';
-import { ToastProvider } from './ui/Toast';
+import { ToastProvider, useToast } from './ui/Toast';
 import { cn } from './ui/cn';
 import { ensureSeeded } from './storage/seed';
 import TodayPage from './features/today/TodayPage';
@@ -25,11 +34,100 @@ const NAV = [
   { to: '/settings', label: '我的', icon: Settings },
 ];
 
-function ScrollToTop() {
-  const { pathname } = useLocation();
+/**
+ * 滚动位置记忆：前进/切换页面回顶部，后退（POP）回到离开时的位置。
+ * 异步列表渲染慢时多试几次，避免内容还没撑开就恢复。
+ */
+function ScrollRestoration() {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const wantScroll = Boolean((location.state as { scroll?: boolean } | null)?.scroll);
+
   useEffect(() => {
-    window.scrollTo({ top: 0 });
-  }, [pathname]);
+    const key = `scroll:${location.pathname}${location.search}`;
+    let saved = 0;
+    try {
+      saved = Number(sessionStorage.getItem(key) ?? 0);
+    } catch {
+      saved = 0;
+    }
+
+    // 边滚边存：真正的离开时刻页面已经被换掉，那时读 scrollY 已经是 0
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        try {
+          sessionStorage.setItem(key, String(window.scrollY));
+        } catch {
+          /* 隐私模式忽略 */
+        }
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    let raf = 0;
+    if ((navigationType === 'POP' || wantScroll) && saved > 0) {
+      let tries = 0;
+      const restore = () => {
+        window.scrollTo({ top: saved });
+        if (Math.abs(window.scrollY - saved) > 4 && tries < 4) {
+          tries++;
+          window.setTimeout(restore, 120);
+        }
+      };
+      raf = requestAnimationFrame(restore);
+    } else {
+      window.scrollTo({ top: 0 });
+    }
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [location.key, location.pathname, location.search, navigationType, wantScroll]);
+
+  return null;
+}
+
+/**
+ * 独立窗口（装到主屏）冷启动时，历史栈只有一条，
+ * 按系统返回会直接把 App 关掉。这里吞掉第一次返回并提示。
+ */
+function StandaloneBackGuard() {
+  useEffect(() => {
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches;
+    if (!standalone) return;
+
+    let armed = false;
+    const onPop = () => {
+      const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+      if (idx > 0) return;
+      if (armed) return;
+      armed = true;
+      window.setTimeout(() => {
+        armed = false;
+      }, 2000);
+      window.history.pushState(window.history.state, '', window.location.href);
+      window.dispatchEvent(new CustomEvent('app:exit-hint'));
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  return null;
+}
+
+/** 独立窗口里按系统返回时给个提示 */
+function ExitHint() {
+  const toast = useToast();
+  useEffect(() => {
+    const onHint = () => toast.show('再按一次退出应用', 'info');
+    window.addEventListener('app:exit-hint', onHint);
+    return () => window.removeEventListener('app:exit-hint', onHint);
+  }, [toast]);
   return null;
 }
 
@@ -137,7 +235,9 @@ export default function App() {
     <ToastProvider>
       <Boot />
       <HashRouter>
-        <ScrollToTop />
+        <ScrollRestoration />
+        <StandaloneBackGuard />
+        <ExitHint />
         <Routes>
           <Route element={<Shell />}>
             <Route path="/" element={<TodayPage />} />

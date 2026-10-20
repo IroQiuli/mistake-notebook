@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useNavigate } from 'react-router-dom';
+import { useGo } from '../../hooks/useBack';
 import { ChevronRight } from 'lucide-react';
 import { db } from '../../storage/db';
 import { dayKey, formatDateTime, learningDayStart } from '../../domain/time';
@@ -44,7 +44,7 @@ export function DetailDialog({
   mode: DetailMode | null;
   onClose: () => void;
 }) {
-  const navigate = useNavigate();
+  const go = useGo();
   const [now] = useState(() => Date.now());
 
   const problems = useLiveQuery(() => db.problems.toArray(), [], []);
@@ -132,10 +132,7 @@ export function DetailDialog({
                     <li key={l.id}>
                       <button
                         type="button"
-                        onClick={() => {
-                          onClose();
-                          navigate(`/problem/${l.problemId}`);
-                        }}
+                        onClick={() => go(`/problem/${l.problemId}`)}
                         className="flex w-full items-center gap-2 px-3 py-2 text-left active:bg-zinc-50"
                       >
                         <span className="min-w-0 flex-1">
@@ -266,10 +263,7 @@ export function DetailDialog({
                   <li key={c.chapterId}>
                     <button
                       type="button"
-                      onClick={() => {
-                        onClose();
-                        navigate(`/chapter/${c.chapterId}`);
-                      }}
+                      onClick={() => go(`/chapter/${c.chapterId}`)}
                       className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[11px] text-zinc-600 active:bg-zinc-50"
                     >
                       <span className="truncate">

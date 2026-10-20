@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronRight, FileStack, Flame, Plus } from 'lucide-react';
 import { db, getSetting } from '../../storage/db';
@@ -58,8 +58,19 @@ export default function TodayPage() {
   );
 
   const [openOffset, setOpenOffset] = useState<number | null>(null);
-  const [detail, setDetail] = useState<DetailMode | null>(null);
+  const [params, setParams] = useSearchParams();
   const [now] = useState(() => Date.now());
+
+  // 弹窗状态放进 URL：从详情页返回时还能自动重开
+  const rawDetail = params.get('detail');
+  const detail: DetailMode | null =
+    rawDetail === 'today' || rawDetail === 'week' || rawDetail === 'active' ? rawDetail : null;
+  const setDetail = (mode: DetailMode | null) => {
+    const next = new URLSearchParams(params);
+    if (mode) next.set('detail', mode);
+    else next.delete('detail');
+    setParams(next, { replace: true });
+  };
 
   const quotas = useMemo(() => {
     const out: Record<string, number> = {};
@@ -391,7 +402,6 @@ export default function TodayPage() {
       </section>
 
       <DetailDialog mode={detail} onClose={() => setDetail(null)} />
-
       <Dialog
         open={openOffset !== null}
         onClose={() => setOpenOffset(null)}

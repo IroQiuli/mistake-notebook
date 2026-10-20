@@ -16,6 +16,7 @@ import { EmptyState } from '../../ui/EmptyState';
 import { PageLoading } from '../../ui/Spinner';
 import { ZoomableImage } from '../../ui/ZoomableImage';
 import { cn } from '../../ui/cn';
+import { useBack } from '../../hooks/useBack';
 import { useSession } from './useSession';
 
 const RATING_STYLE: Record<Rating, string> = {
@@ -35,6 +36,7 @@ function ReviewBody({
   onSwitchSubject?: (id?: string) => void;
 }) {
   const navigate = useNavigate();
+  const back = useBack('/');
   const paperIds = paper?.problemIds;
   const { queue, index, current, revealed, finished, summary, reveal, rate, jump } = useSession(
     subjectId,
@@ -157,9 +159,9 @@ function ReviewBody({
             variant={paper ? 'secondary' : 'primary'}
             size="lg"
             block
-            onClick={() => navigate('/')}
+            onClick={back}
           >
-            回到首页
+            返回上一页
           </Button>
           <Button size="lg" block onClick={() => navigate('/library')}>
             看看错题本
@@ -202,7 +204,7 @@ function ReviewBody({
         <div className="flex items-center justify-between px-3 py-2">
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={back}
             className="flex h-10 w-10 items-center justify-center rounded-lg text-zinc-500 active:bg-zinc-100"
             aria-label="退出复习"
           >
