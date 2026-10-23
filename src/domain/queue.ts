@@ -1,5 +1,5 @@
-import type { Card, Problem } from './types';
-import { learningDayEnd } from './time';
+import type { Card, Problem, ReviewLog } from './types';
+import { dayKey, learningDayEnd } from './time';
 import { weightOf } from './weight';
 
 export interface QueueOptions {
@@ -21,6 +21,10 @@ export interface QueueOptions {
    * 超出的到期题顺延到明天（不会丢，只是不进今天的队列）。
    */
   limit?: number;
+  /** 今天已经复习过的题目 ID 集合：从今日待写队列中彻底排除 */
+  reviewedTodayIds?: Set<string>;
+  /** 今天每个科目已复习题数：用于抵扣今日配额，已做满的科目不再补题 */
+  reviewedCounts?: Record<string, number>;
 }
 
 export interface QueueItem {
@@ -32,7 +36,16 @@ export interface QueueItem {
 }
 
 export function buildQueue(problems: Problem[], cards: Card[], opts: QueueOptions): QueueItem[] {
-  const { now, newLimit = 30, subjectId, interleave = true, quotas, limit } = opts;
+  const {
+    now,
+    newLimit = 30,
+    subjectId,
+    interleave = true,
+    quotas,
+    limit,
+    reviewedTodayIds,
+    reviewedCounts,
+  } = opts;
   const end = learningDayEnd(now);
   const cardMap = new Map(cards.map((c) => [c.problemId, c]));
 
@@ -43,6 +56,8 @@ export function buildQueue(problems: Problem[], cards: Card[], opts: QueueOption
   for (const p of problems) {
     if (p.archivedAt) continue;
     if (subjectId && p.subjectId !== subjectId) continue;
+    // 今天已经做过的题目，无论评分是记得还是忘记，均已完成今日复习，不进今日待写
+    if (reviewedTodayIds && reviewedTodayIds.has(p.id)) continue;
     const c = cardMap.get(p.id);
     if (!c) continue;
     const overdueDays = Math.max(0, Math.floor((end - c.due) / 86400000));
@@ -62,9 +77,14 @@ export function buildQueue(problems: Problem[], cards: Card[], opts: QueueOption
   const duePool = [...due, ...limitedFresh];
 
   const hasQuotas = quotas && Object.keys(quotas).length > 0;
-  let all = hasQuotas ? applyQuotas(duePool, later, quotas) : duePool;
-  if (limit && limit > 0 && all.length > limit) {
-    all = all.slice(0, limit);
+  let all = hasQuotas ? applyQuotas(duePool, later, quotas, reviewedCounts) : duePool;
+
+  if (limit && limit > 0) {
+    const todayDone = reviewedTodayIds ? reviewedTodayIds.size : 0;
+    const remainingLimit = Math.max(0, limit - todayDone);
+    if (all.length > remainingLimit) {
+      all = all.slice(0, remainingLimit);
+    }
   }
 
   return interleave ? interleaveBySubject(all) : all;
@@ -84,11 +104,13 @@ function sortDue(items: QueueItem[]): void {
 /**
  * 按每科题量裁剪队列；不足的科目从「还没到期」的题里按到期时间从近到远补齐。
  * 补齐只是提前复习，不会改动排期本身。
+ * 若提供了 reviewedCounts，则按 (quota - done) 扣减剩余待写题量，做满后不再拉题。
  */
 function applyQuotas(
   duePool: QueueItem[],
   later: QueueItem[],
-  quotas: Record<string, number>
+  quotas: Record<string, number>,
+  reviewedCounts?: Record<string, number>
 ): QueueItem[] {
   const bySubjectDue = new Map<string, QueueItem[]>();
   for (const it of duePool) {
@@ -120,12 +142,20 @@ function applyQuotas(
     }
     if (quota <= 0) continue;
 
-    const taken = dueList.slice(0, quota);
+    // 抵扣今天已完成的题量
+    const done = reviewedCounts?.[sid] ?? 0;
+    const remainingQuota = Math.max(0, quota - done);
+    if (remainingQuota <= 0) {
+      // 本科今日目标已达成，不再安排待写
+      continue;
+    }
+
+    const taken = dueList.slice(0, remainingQuota);
     out.push(...taken);
 
-    if (taken.length < quota) {
+    if (taken.length < remainingQuota) {
       const fillers = (bySubjectLater.get(sid) ?? [])
-        .slice(0, quota - taken.length)
+        .slice(0, remainingQuota - taken.length)
         .map((it) => ({ ...it, auto: true }));
       out.push(...fillers);
     }
@@ -157,4 +187,39 @@ function interleaveBySubject(items: QueueItem[]): QueueItem[] {
     }
   }
   return out;
+}
+
+/** 提取今日已作答过的题目 ID 集合 */
+export function getTodayReviewedIds(logs: ReviewLog[], now: number): Set<string> {
+  const today = dayKey(now);
+  const seen = new Set<string>();
+  for (const l of logs) {
+    if (l.rating === 0) continue;
+    if (dayKey(l.reviewedAt) === today) {
+      seen.add(l.problemId);
+    }
+  }
+  return seen;
+}
+
+/** 统计今日每个科目已作答题数（按题目去重） */
+export function getTodayReviewedBySubject(
+  logs: ReviewLog[],
+  problemMap: Map<string, Problem>,
+  now: number
+): Record<string, number> {
+  const today = dayKey(now);
+  const map: Record<string, number> = {};
+  const seen = new Set<string>();
+  for (const l of logs) {
+    if (l.rating === 0) continue;
+    if (dayKey(l.reviewedAt) !== today) continue;
+    if (seen.has(l.problemId)) continue;
+    seen.add(l.problemId);
+    const p = problemMap.get(l.problemId);
+    if (p) {
+      map[p.subjectId] = (map[p.subjectId] ?? 0) + 1;
+    }
+  }
+  return map;
 }

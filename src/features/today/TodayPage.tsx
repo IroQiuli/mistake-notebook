@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronRight, FileStack, Flame, Plus } from 'lucide-react';
+import { ChevronRight, FileStack, Flame, ListOrdered, Plus } from 'lucide-react';
 import { db, getSetting } from '../../storage/db';
-import { buildQueue } from '../../domain/queue';
-import { dayKey, formatToday, learningDayEnd, learningDayStart } from '../../domain/time';
+import { buildQueue, getTodayReviewedBySubject, getTodayReviewedIds } from '../../domain/queue';
+import { formatToday, learningDayEnd, learningDayStart } from '../../domain/time';
 import { calcStreak, problemsDueOn } from '../../domain/stats';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
@@ -58,6 +58,7 @@ export default function TodayPage() {
   );
 
   const [openOffset, setOpenOffset] = useState<number | null>(null);
+  const [showPendingDialog, setShowPendingDialog] = useState(false);
   const [params, setParams] = useSearchParams();
   const [now] = useState(() => Date.now());
 
@@ -91,46 +92,33 @@ export default function TodayPage() {
     return sum > 0 ? sum : dailyGoal;
   }, [quotaSubjects, quotas, dailyGoal]);
 
+  const streak = calcStreak(logs, now);
+  const problemMap = useMemo(() => new Map(problems.map((p) => [p.id, p])), [problems]);
+
+  /** 今日已做题目 ID 集合：做完后立刻从今日待写移出 */
+  const reviewedTodayIds = useMemo(() => getTodayReviewedIds(logs, now), [logs, now]);
+
+  /** 今天每个科目写了几道（同一题多次只算一次） */
+  const reviewedBySubject = useMemo(
+    () => getTodayReviewedBySubject(logs, problemMap, now),
+    [logs, problemMap, now]
+  );
+
+  /** 今日已写：按题目去重，一天内重复做同一题不重复计数 */
+  const todayReviewed = reviewedTodayIds.size;
+
+  /** 今日剩余待写队列：已扣除今日已答题目与各科已完成配额 */
   const queue = useMemo(
     () =>
       buildQueue(problems, cards, {
         now,
         quotas: quotaSubjects.length ? quotas : undefined,
         limit: plan,
+        reviewedTodayIds,
+        reviewedCounts: reviewedBySubject,
       }),
-    [problems, cards, now, quotas, quotaSubjects.length, plan]
+    [problems, cards, now, quotas, quotaSubjects.length, plan, reviewedTodayIds, reviewedBySubject]
   );
-
-  const streak = calcStreak(logs, now);
-  const problemMap = useMemo(() => new Map(problems.map((p) => [p.id, p])), [problems]);
-
-  /** 今天每个科目写了几道（同一题多次只算一次） */
-  const reviewedBySubject = useMemo(() => {
-    const map = new Map<string, number>();
-    const seen = new Set<string>();
-    const today = dayKey(now);
-    for (const l of logs) {
-      if (l.rating === 0) continue;
-      if (dayKey(l.reviewedAt) !== today) continue;
-      if (seen.has(l.problemId)) continue;
-      seen.add(l.problemId);
-      const p = problemMap.get(l.problemId);
-      if (!p) continue;
-      map.set(p.subjectId, (map.get(p.subjectId) ?? 0) + 1);
-    }
-    return map;
-  }, [logs, problemMap, now]);
-
-  /** 今日已写：按题目去重，一天内重复做同一题不重复计数 */
-  const todayReviewed = useMemo(() => {
-    const today = dayKey(now);
-    const seen = new Set<string>();
-    for (const l of logs) {
-      if (l.rating === 0 || dayKey(l.reviewedAt) !== today) continue;
-      seen.add(l.problemId);
-    }
-    return seen.size;
-  }, [logs, now]);
 
   const weekReviewed = useMemo(() => {
     const seen = new Set<string>();
@@ -143,12 +131,14 @@ export default function TodayPage() {
 
   const activeCount = problems.filter((p) => !p.archivedAt).length;
 
-  /** 今天到期（含逾期）的总数，用来提示「还有多少顺延到明天」 */
+  /** 今天尚未作答的到期（含逾期）总数，用来提示「还有多少顺延到明天」 */
   const dueCount = useMemo(() => {
     const end = learningDayEnd(now);
     const active = new Set(problems.filter((p) => !p.archivedAt).map((p) => p.id));
-    return cards.filter((c) => active.has(c.problemId) && c.due <= end).length;
-  }, [problems, cards, now]);
+    return cards.filter(
+      (c) => active.has(c.problemId) && c.due <= end && !reviewedTodayIds.has(c.problemId)
+    ).length;
+  }, [problems, cards, now, reviewedTodayIds]);
 
   const deferred = Math.max(0, dueCount - queue.length);
 
@@ -170,6 +160,21 @@ export default function TodayPage() {
   const needBackup = lastBackupAt === 0 || (backupDays ?? 0) >= 7;
   const donePct = Math.min(1, todayReviewed / Math.max(1, plan));
 
+  /** 考研初试倒计时看板 */
+  const examCountdown = useMemo(() => {
+    const d = new Date(now);
+    const year = d.getFullYear();
+    // 考研初试一般在每年 12 月倒数第二个周六（如 2026 年为 12 月 19 日）
+    let target = new Date(year, 11, 19, 8, 30, 0).getTime();
+    let examYear = year + 1;
+    if (now > target) {
+      target = new Date(year + 1, 11, 19, 8, 30, 0).getTime();
+      examYear = year + 2;
+    }
+    const days = Math.max(0, Math.ceil((target - now) / 86400000));
+    return { days, year: examYear };
+  }, [now]);
+
   return (
     <div className="space-y-4">
       <header className="flex items-end justify-between pt-1">
@@ -186,6 +191,19 @@ export default function TodayPage() {
           </div>
         )}
       </header>
+
+      {/* 考研初试倒计时看板 */}
+      <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/40 border border-orange-200/80 px-3.5 py-2 text-xs shadow-xs">
+        <div className="flex items-center gap-1.5 font-medium text-orange-900">
+          <span className="flex h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+          <span>目标 {examCountdown.year} 考研初试</span>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <span className="text-[11px] text-zinc-500">倒计时</span>
+          <span className="text-base font-bold tabular-nums text-orange-600">{examCountdown.days}</span>
+          <span className="text-[11px] text-zinc-500">天</span>
+        </div>
+      </div>
 
       {needBackup && (
         <Link
@@ -206,18 +224,33 @@ export default function TodayPage() {
           className="pointer-events-none absolute -right-12 -top-16 h-40 w-40 rounded-full opacity-70"
           style={{ background: 'radial-gradient(circle, #ffedd5 0%, rgba(255,255,255,0) 70%)' }}
         />
-        <div className="relative flex items-start justify-between gap-3">
+        <div
+          onClick={() => queue.length > 0 && setShowPendingDialog(true)}
+          className={cn(
+            'relative flex items-start justify-between gap-3',
+            queue.length > 0 && 'cursor-pointer select-none group'
+          )}
+          title={queue.length > 0 ? '点击查看今日待写清单' : undefined}
+        >
           <div className="min-w-0">
             <div className="flex items-baseline gap-1.5">
               <span
                 data-testid="queue-count"
-                className="text-[44px] font-semibold leading-none tracking-tight tabular-nums text-zinc-900"
+                className="text-[44px] font-semibold leading-none tracking-tight tabular-nums text-zinc-900 group-hover:text-orange-600 transition-colors"
               >
                 {queue.length}
               </span>
               <span className="text-sm text-zinc-500">道</span>
+              {queue.length > 0 && (
+                <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-600 group-hover:bg-orange-100 transition-colors">
+                  <ListOrdered size={12} />
+                  待写清单
+                </span>
+              )}
             </div>
-            <div className="mt-1.5 text-sm text-zinc-600">今天要写</div>
+            <div className="mt-1.5 text-sm text-zinc-600">
+              {queue.length > 0 ? '今天要写（待完成）' : '今日待写已清空'}
+            </div>
             <div className="mt-1 text-[11px] leading-relaxed text-zinc-400">
               {deferred > 0 ? (
                 <>
@@ -225,14 +258,27 @@ export default function TodayPage() {
                   {quotaSubjects.length > 0 && '（超出每科题量的部分）'}
                 </>
               ) : dueCount === 0 ? (
-                '今天没有到期的题'
+                queue.length === 0 ? (
+                  '今天计划的错题已全部写完！'
+                ) : (
+                  '按排期自动拉取未到期题目'
+                )
               ) : (
-                `今天到期 ${dueCount} 道`
+                `还有 ${dueCount} 道今日到期待写`
               )}
             </div>
           </div>
           <ProgressRing done={todayReviewed} goal={plan} size={66} />
         </div>
+
+        {queue.length === 0 && todayReviewed > 0 && (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-center">
+            <div className="text-sm font-semibold text-emerald-800">🎉 今日错题已全部清空！</div>
+            <p className="mt-0.5 text-xs text-emerald-600">
+              今日已复习 {todayReviewed} 道题，保持稳健节奏，稳步上岸！
+            </p>
+          </div>
+        )}
 
         {queue.length > 0 ? (
           <div className="mt-4 flex gap-2">
@@ -269,7 +315,7 @@ export default function TodayPage() {
         {quotaSubjects.length > 0 && (
           <div className="mt-4 space-y-1.5 border-t border-zinc-100 pt-3">
             {quotaSubjects.map((s) => {
-              const done = reviewedBySubject.get(s.id) ?? 0;
+              const done = reviewedBySubject[s.id] ?? 0;
               const goal = quotas[s.id] ?? 0;
               const pct = Math.min(1, done / Math.max(1, goal));
               return (
@@ -402,6 +448,52 @@ export default function TodayPage() {
       </section>
 
       <DetailDialog mode={detail} onClose={() => setDetail(null)} />
+      <Dialog
+        open={showPendingDialog}
+        onClose={() => setShowPendingDialog(false)}
+        title={`今日待写清单（${queue.length} 道）`}
+        size="md"
+      >
+        <div className="space-y-2">
+          {queue.map((item, idx) => {
+            const chapter = chapterMap.get(item.problem.chapterId);
+            const subject = subjectMap.get(item.problem.subjectId);
+            return (
+              <Link
+                key={item.problem.id}
+                to={`/problem/${item.problem.id}`}
+                onClick={() => setShowPendingDialog(false)}
+                className="flex items-center gap-3 rounded-xl border border-zinc-200 p-2.5 active:bg-zinc-50"
+              >
+                <span
+                  className="h-9 w-1 shrink-0 rounded-full"
+                  style={{ backgroundColor: subject?.color }}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold tabular-nums text-zinc-400">
+                      #{idx + 1}
+                    </span>
+                    <span className="truncate text-sm font-medium text-zinc-800">
+                      {chapter?.name ?? '未分类'}
+                    </span>
+                    {item.auto && (
+                      <span className="rounded bg-sky-50 px-1 text-[10px] text-sky-600">配额补齐</span>
+                    )}
+                  </span>
+                  <span className="block truncate text-[11px] text-zinc-400">
+                    {item.problem.wrongNote || item.problem.sourcePaper || '没有备注'}
+                  </span>
+                </span>
+                <ChevronRight size={16} className="shrink-0 text-zinc-300" />
+              </Link>
+            );
+          })}
+          {queue.length === 0 && (
+            <p className="py-4 text-center text-xs text-zinc-400">今天待写的错题已全部完成！</p>
+          )}
+        </div>
+      </Dialog>
       <Dialog
         open={openOffset !== null}
         onClose={() => setOpenOffset(null)}

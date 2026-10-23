@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { Camera, FileText, Image as ImageIcon, SlidersHorizontal } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Camera, Clipboard, FileText, Image as ImageIcon, SlidersHorizontal } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import { useToast } from '../../ui/Toast';
@@ -94,6 +94,50 @@ export default function CapturePage() {
       toast.show('这个 PDF 打不开，可能已加密或损坏', 'error');
     } finally {
       setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (stage !== 'pick') return;
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            void loadBlob(file);
+            toast.show('已载入剪贴板截图', 'success');
+            return;
+          }
+        }
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [stage]);
+
+  const pasteFromClipboard = async () => {
+    try {
+      if (!navigator.clipboard?.read) {
+        toast.show('当前浏览器限制剪贴板读取，请直接按键盘 Ctrl+V 粘贴', 'info');
+        return;
+      }
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            await loadBlob(blob);
+            toast.show('已载入剪贴板截图', 'success');
+            return;
+          }
+        }
+      }
+      toast.show('剪贴板中未找到图片内容', 'info');
+    } catch {
+      toast.show('读取剪贴板受阻，请直接在页面按 Ctrl+V 粘贴', 'info');
     }
   };
 
@@ -259,6 +303,28 @@ export default function CapturePage() {
             <span>
               <span className="block text-sm font-medium text-zinc-900">从相册选</span>
               <span className="block text-xs text-zinc-500">截图、拍照都行</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void pasteFromClipboard()}
+            className="flex w-full items-center gap-4 rounded-2xl border border-dashed border-orange-300 bg-orange-50/40 p-4 text-left active:bg-orange-100/50 disabled:opacity-60 transition-colors"
+          >
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
+              <Clipboard size={22} />
+            </span>
+            <span>
+              <span className="flex items-center gap-1.5 text-sm font-medium text-orange-950">
+                从剪贴板粘贴
+                <span className="rounded bg-orange-200/70 px-1.5 py-0.2 text-[10px] font-semibold text-orange-800">
+                  Ctrl + V
+                </span>
+              </span>
+              <span className="block text-xs text-orange-700/70">
+                做题截图后直接按快捷键或点击载入
+              </span>
             </span>
           </button>
 

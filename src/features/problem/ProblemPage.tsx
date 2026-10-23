@@ -7,6 +7,7 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  Edit3,
   ImagePlus,
   Minus,
   Plus,
@@ -108,6 +109,9 @@ export default function ProblemPage() {
   const [zoomAnswer, setZoomAnswer] = useState<number | null>(null);
   const [customDays, setCustomDays] = useState('');
   const [showAllLogs, setShowAllLogs] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [deleteAssetId, setDeleteAssetId] = useState<string | null>(null);
   const answerInput = useRef<HTMLInputElement>(null);
   const now = Date.now();
 
@@ -135,9 +139,24 @@ export default function ProblemPage() {
       ids.push(await putAsset(blob, 'answer', { width, height }));
     }
     await updateProblem(problem.id, {
-      answerAssetIds: [...problem.answerAssetIds, ...ids].slice(0, 6),
+      answerAssetIds: [...problem.answerAssetIds, ...ids].slice(0, 8),
     });
     toast.show('已添加答案图', 'success');
+  };
+
+  const deleteAnswerImage = async (assetId: string) => {
+    if (!problem) return;
+    const nextIds = problem.answerAssetIds.filter((id) => id !== assetId);
+    await updateProblem(problem.id, { answerAssetIds: nextIds });
+    toast.show('已删除该答案图片', 'success');
+    setDeleteAssetId(null);
+  };
+
+  const saveNote = async (text: string) => {
+    if (!problem) return;
+    await updateProblem(problem.id, { wrongNote: text.trim() });
+    toast.show(text.trim() ? '已更新错因备注' : '已清空错因备注', 'success');
+    setNoteOpen(false);
   };
 
   const applyReschedule = async (days: number) => {
@@ -355,21 +374,33 @@ export default function ProblemPage() {
           </div>
 
           {showAnswer ? (
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="flex gap-2 overflow-x-auto pb-1">
               {answerUrls.map((a, i) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => setZoomAnswer(i)}
-                  className="shrink-0 overflow-hidden rounded-lg border border-zinc-200 active:opacity-80"
-                >
-                  <img
-                    src={a.url}
-                    alt={`答案 ${i + 1}`}
-                    className="h-28 w-auto object-cover"
-                    loading="lazy"
-                  />
-                </button>
+                <div key={a.id} className="relative shrink-0 group">
+                  <button
+                    type="button"
+                    onClick={() => setZoomAnswer(i)}
+                    className="block overflow-hidden rounded-lg border border-zinc-200 active:opacity-80"
+                  >
+                    <img
+                      src={a.url}
+                      alt={`答案 ${i + 1}`}
+                      className="h-28 w-auto object-cover"
+                      loading="lazy"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteAssetId(a.id);
+                    }}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-red-600 transition-colors shadow-sm"
+                    title="删除这张答案图"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
@@ -410,28 +441,43 @@ export default function ProblemPage() {
         </div>
       )}
 
-      {(problem.wrongNote || (problem.errorTags?.length ?? 0) > 0) && (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-          <h2 className="text-xs font-medium text-amber-800">当时为什么错</h2>
-          {(problem.errorTags?.length ?? 0) > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {problem.errorTags!.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-700"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-          {problem.wrongNote && (
-            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-amber-900">
-              {problem.wrongNote}
-            </p>
-          )}
-        </section>
-      )}
+      <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold text-amber-800">当时为什么错 · 错因备注</h2>
+          <button
+            type="button"
+            onClick={() => {
+              setNoteDraft(problem.wrongNote || '');
+              setNoteOpen(true);
+            }}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+          >
+            <Edit3 size={11} />
+            {problem.wrongNote ? '编辑备注' : '添加备注'}
+          </button>
+        </div>
+        {(problem.errorTags?.length ?? 0) > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {problem.errorTags!.map((tag) => (
+              <span
+                key={tag}
+                className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-700"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+        {problem.wrongNote ? (
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-amber-900">
+            {problem.wrongNote}
+          </p>
+        ) : (
+          <p className="mt-1.5 text-xs text-amber-600/70 italic">
+            暂无备注，点击右上角记录这道题为什么做错、关键知识点或解题突破口
+          </p>
+        )}
+      </section>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4">
         <h2 className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
@@ -625,6 +671,70 @@ export default function ProblemPage() {
         {stemUrl && (
           <ZoomableImage src={stemUrl} className="h-[68vh] w-full rounded-lg" alt="题干大图" />
         )}
+      </Dialog>
+
+      {/* 快捷编辑错因与心得备注 */}
+      <Dialog
+        open={noteOpen}
+        onClose={() => setNoteOpen(false)}
+        title="编辑错因与心得备注"
+        size="md"
+      >
+        <div className="space-y-3">
+          <textarea
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            placeholder="记录这道题为什么做错、关键知识点、易错陷阱或解题心得..."
+            rows={4}
+            className="w-full rounded-xl border border-zinc-200 p-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+          />
+          <div className="flex items-center justify-between gap-2">
+            {problem.wrongNote ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void saveNote('')}
+                className="text-red-600 hover:bg-red-50"
+              >
+                <Trash2 size={13} />
+                清空删除
+              </Button>
+            ) : <div />}
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setNoteOpen(false)}>
+                取消
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => void saveNote(noteDraft)}>
+                保存
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* 删除答案图片确认 */}
+      <Dialog
+        open={deleteAssetId !== null}
+        onClose={() => setDeleteAssetId(null)}
+        title="删除答案图片"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-600">确定要删除这张答案图片吗？此操作无法撤销。</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setDeleteAssetId(null)}>
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteAssetId && void deleteAnswerImage(deleteAssetId)}
+            >
+              确定删除
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

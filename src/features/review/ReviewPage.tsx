@@ -1,10 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, ChevronLeft, ChevronRight, FilePlus, FileStack, Maximize2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  FilePlus,
+  FileStack,
+  ImagePlus,
+  Maximize2,
+  Timer,
+  Trash2,
+} from 'lucide-react';
 import { db } from '../../storage/db';
 import { clearActivePaper, loadActivePaper, type ActivePaper } from '../../storage/paper';
-import { getUrl } from '../../storage/assets';
+import { getUrl, putAsset } from '../../storage/assets';
 import { previewIntervals } from '../../domain/scheduler';
 import { formatDue, formatDuration, formatDateTime } from '../../domain/time';
 import { RATING_LABEL, type Rating } from '../../domain/types';
@@ -17,7 +28,10 @@ import { PageLoading } from '../../ui/Spinner';
 import { ZoomableImage } from '../../ui/ZoomableImage';
 import { cn } from '../../ui/cn';
 import { useBack } from '../../hooks/useBack';
+import { useToast } from '../../ui/Toast';
 import { useSession } from './useSession';
+import { canvasToBlob, prepareImage } from '../capture/pipeline';
+import { updateProblem } from '../../storage/problems';
 
 const RATING_STYLE: Record<Rating, string> = {
   1: 'border-red-200 bg-red-50 text-red-600',
@@ -37,14 +51,50 @@ function ReviewBody({
 }) {
   const navigate = useNavigate();
   const back = useBack('/');
+  const toast = useToast();
   const paperIds = paper?.problemIds;
-  const { queue, index, current, revealed, finished, summary, reveal, rate, jump } = useSession(
-    subjectId,
-    paperIds
-  );
+  const {
+    queue,
+    index,
+    current,
+    revealed,
+    finished,
+    summary,
+    reveal,
+    rate,
+    jump,
+    updateCurrentNote,
+    deleteCurrentAnswerAsset,
+  } = useSession(subjectId, paperIds);
 
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [deleteAssetId, setDeleteAssetId] = useState<string | null>(null);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(true);
+  const answerInputRef = useRef<HTMLInputElement>(null);
+
   const problemId = current?.problem.id;
+
+  // 题目切换时重置计时器
+  useEffect(() => {
+    setTimerSeconds(0);
+    setTimerRunning(true);
+  }, [current?.problem.id]);
+
+  // 计时器轮询
+  useEffect(() => {
+    if (!timerRunning || finished) return;
+    const t = setInterval(() => setTimerSeconds((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [timerRunning, finished]);
+
+  const formatStopwatch = (totalSec: number) => {
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
 
   const chapter = useLiveQuery(
     () => (current ? db.chapters.get(current.problem.chapterId) : undefined),
@@ -69,19 +119,36 @@ function ReviewBody({
   );
 
   const stemUrl = useAssetUrl(current?.problem.stemAssetId);
-  const answerUrls = useLiveQuery(
+  const answerAssets = useLiveQuery(
     async () => {
-      if (!current) return [] as string[];
-      const urls: string[] = [];
+      if (!current) return [] as { id: string; url: string }[];
+      const list: { id: string; url: string }[] = [];
       for (const id of current.problem.answerAssetIds) {
         const url = await getUrl(id);
-        if (url) urls.push(url);
+        if (url) list.push({ id, url });
       }
-      return urls;
+      return list;
     },
-    [current?.problem.id],
+    [current?.problem.id, current?.problem.answerAssetIds?.join(',')],
     []
   );
+
+  const addAnswerImages = async (files: FileList | null) => {
+    if (!files || !current) return;
+    try {
+      const ids: string[] = [];
+      for (const file of Array.from(files).slice(0, 6)) {
+        const { canvas, width, height } = await prepareImage(file, 2400);
+        const blob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
+        ids.push(await putAsset(blob, 'answer', { width, height }));
+      }
+      const nextIds = [...current.problem.answerAssetIds, ...ids].slice(0, 8);
+      await updateProblem(current.problem.id, { answerAssetIds: nextIds });
+      toast.show('已添加答案图片', 'success');
+    } catch {
+      toast.show('图片添加失败', 'error');
+    }
+  };
 
   const weight = current ? weightOf(current.problem) : 5;
   const preview = useMemo(
@@ -212,8 +279,11 @@ function ReviewBody({
           </button>
           <div className="min-w-0 text-center">
             <div className="text-xs font-medium text-zinc-700">
-              {index + 1} / {queue.length}
-              {paper && <span className="ml-1 text-[10px] text-orange-500">套卷</span>}
+              第 {index + 1} 题
+              <span className="ml-1 text-[11px] font-normal text-zinc-400">
+                (剩余 {Math.max(0, queue.length - index - 1)} 题)
+              </span>
+              {paper && <span className="ml-1 text-[10px] font-semibold text-orange-500">套卷</span>}
             </div>
             <div className="truncate text-[11px] text-zinc-400">
               {paper ? (
@@ -226,8 +296,22 @@ function ReviewBody({
               )}
             </div>
           </div>
-          <div className="flex h-10 items-center gap-1 rounded-lg bg-zinc-50 px-2 text-[10px] text-zinc-500">
-            权重 <span className="font-medium tabular-nums text-zinc-700">{weight}</span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setTimerRunning((r) => !r)}
+              className="flex h-10 items-center gap-1 rounded-lg bg-zinc-50 px-2 text-[11px] text-zinc-600 active:bg-zinc-100"
+              title={timerRunning ? '点击暂停计时' : '点击继续计时'}
+            >
+              <Timer
+                size={13}
+                className={timerRunning ? 'text-orange-500 animate-pulse' : 'text-zinc-400'}
+              />
+              <span className="font-mono font-medium">{formatStopwatch(timerSeconds)}</span>
+            </button>
+            <div className="flex h-10 items-center gap-1 rounded-lg bg-zinc-50 px-2 text-[10px] text-zinc-500">
+              权重 <span className="font-medium tabular-nums text-zinc-700">{weight}</span>
+            </div>
           </div>
         </div>
 
@@ -276,33 +360,87 @@ function ReviewBody({
       </div>
 
       {revealed && (
-        <div className="max-h-[36vh] overflow-y-auto border-t border-zinc-100 bg-white px-4 py-3">
-          {answerUrls.length > 0 ? (
-            <div className="flex gap-2 overflow-x-auto">
-              {answerUrls.map((url, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setZoomUrl(url)}
-                  className="shrink-0 overflow-hidden rounded-lg border border-zinc-200 active:opacity-80"
-                  aria-label={`放大答案 ${i + 1}`}
-                >
-                  <img src={url} alt={`答案 ${i + 1}`} className="h-40 w-auto object-contain" />
-                </button>
+        <div className="max-h-[38vh] overflow-y-auto border-t border-zinc-100 bg-white px-4 py-3">
+          <input
+            ref={answerInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => void addAnswerImages(e.target.files)}
+          />
+
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-600">
+              参考答案（{answerAssets.length} 张）
+            </span>
+            <button
+              type="button"
+              onClick={() => answerInputRef.current?.click()}
+              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-orange-600 hover:bg-orange-50 transition-colors"
+            >
+              <ImagePlus size={13} />
+              添加答案图
+            </button>
+          </div>
+
+          {answerAssets.length > 0 ? (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {answerAssets.map((a, i) => (
+                <div key={a.id} className="relative shrink-0 group">
+                  <button
+                    type="button"
+                    onClick={() => setZoomUrl(a.url)}
+                    className="block overflow-hidden rounded-lg border border-zinc-200 active:opacity-80"
+                    aria-label={`放大答案 ${i + 1}`}
+                  >
+                    <img src={a.url} alt={`答案 ${i + 1}`} className="h-36 w-auto object-contain" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteAssetId(a.id);
+                    }}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-red-600 transition-colors shadow-sm"
+                    title="删除这张答案图"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-zinc-400">没有上传答案图</p>
+            <p className="rounded-lg border border-dashed border-zinc-200 py-3 text-center text-xs text-zinc-400">
+              尚未上传答案图
+            </p>
           )}
 
-          {current.problem.wrongNote && (
-            <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2">
-              <span className="text-[11px] font-medium text-amber-700">当时为什么错</span>
-              <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-amber-900">
+          <div className="mt-2 rounded-xl bg-amber-50/80 border border-amber-200/70 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-amber-800">错因与心得备注</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setNoteDraft(current.problem.wrongNote || '');
+                  setNoteOpen(true);
+                }}
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+              >
+                <Edit3 size={11} />
+                {current.problem.wrongNote ? '修改备注' : '添加备注'}
+              </button>
+            </div>
+            {current.problem.wrongNote ? (
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-amber-950">
                 {current.problem.wrongNote}
               </p>
-            </div>
-          )}
+            ) : (
+              <p className="mt-1 text-xs text-amber-600/70 italic">
+                暂无错因备注，点击右上角记录做题心得或突破思路
+              </p>
+            )}
+          </div>
 
           {recentLogs.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-zinc-400">
@@ -372,6 +510,88 @@ function ReviewBody({
         {zoomUrl && (
           <ZoomableImage src={zoomUrl} className="h-[70vh] w-full rounded-lg" alt="大图" />
         )}
+      </Dialog>
+
+      {/* 编辑错因与心得备注弹窗 */}
+      <Dialog
+        open={noteOpen}
+        onClose={() => setNoteOpen(false)}
+        title="编辑错因与心得备注"
+        size="md"
+      >
+        <div className="space-y-3">
+          <textarea
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            placeholder="记录当时为什么做错、解题关键思路或复习心得..."
+            rows={4}
+            className="w-full rounded-xl border border-zinc-200 p-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+          />
+          <div className="flex items-center justify-between gap-2">
+            {current?.problem.wrongNote ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  await updateCurrentNote('');
+                  setNoteOpen(false);
+                  toast.show('已清空错因备注', 'info');
+                }}
+                className="text-red-600 hover:bg-red-50"
+              >
+                <Trash2 size={13} />
+                清空删除
+              </Button>
+            ) : <div />}
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setNoteOpen(false)}>
+                取消
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={async () => {
+                  await updateCurrentNote(noteDraft.trim());
+                  setNoteOpen(false);
+                  toast.show('已保存错因备注', 'success');
+                }}
+              >
+                保存
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* 删除答案图片确认弹窗 */}
+      <Dialog
+        open={deleteAssetId !== null}
+        onClose={() => setDeleteAssetId(null)}
+        title="删除答案图片"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-600">确定要删除这张答案图片吗？此操作无法撤销。</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setDeleteAssetId(null)}>
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={async () => {
+                if (deleteAssetId) {
+                  await deleteCurrentAnswerAsset(deleteAssetId);
+                  setDeleteAssetId(null);
+                  toast.show('已删除该答案图片', 'success');
+                }
+              }}
+            >
+              确定删除
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

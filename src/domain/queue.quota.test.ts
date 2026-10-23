@@ -78,4 +78,52 @@ describe('每科每日题量', () => {
     const cs = [1, 2, 3].map((i) => card(`p${i}`, T0 - i * DAY));
     expect(buildQueue(ps, cs, { now: T0 })).toHaveLength(3);
   });
+
+  it('今日已做过的题目（无论到期时间）彻底移出待写队列', () => {
+    const ps = [problem({ id: 'p1' }), problem({ id: 'p2' })];
+    // p1 即使因评为“忘记”导致 due 仍在今天内，只要在 reviewedTodayIds 里就不进待写
+    const cs = [card('p1', T0 + 5 * 60 * 1000), card('p2', T0 - DAY)];
+    const q = buildQueue(ps, cs, {
+      now: T0,
+      reviewedTodayIds: new Set(['p1']),
+    });
+    expect(q.map((x) => x.problem.id)).toEqual(['p2']);
+  });
+
+  it('已做题量抵扣科目配额，做完一道后待写精确 -1，且不会重复从 later 抓回已做题目', () => {
+    const ps = [
+      problem({ id: 'p1' }),
+      problem({ id: 'p2' }),
+      problem({ id: 'p3' }),
+      problem({ id: 'later1' }),
+    ];
+    // 配额 3 道，已做 1 道 (p1)，待写应只剩 2 道 (p2, p3)
+    const cs = [
+      card('p1', T0 + DAY), // 刚刚做完推到明天
+      card('p2', T0 - DAY),
+      card('p3', T0 - DAY),
+      card('later1', T0 + 2 * DAY),
+    ];
+    const q = buildQueue(ps, cs, {
+      now: T0,
+      quotas: { s1: 3 },
+      reviewedTodayIds: new Set(['p1']),
+      reviewedCounts: { s1: 1 },
+      interleave: false,
+    });
+    // 剩余待写仅 2 道，且绝不包含 p1
+    expect(q.map((x) => x.problem.id)).toEqual(['p2', 'p3']);
+  });
+
+  it('科目配额已全部做满时，待写数量归零', () => {
+    const ps = [problem({ id: 'p1' }), problem({ id: 'later1' })];
+    const cs = [card('p1', T0 + DAY), card('later1', T0 + 2 * DAY)];
+    const q = buildQueue(ps, cs, {
+      now: T0,
+      quotas: { s1: 1 },
+      reviewedTodayIds: new Set(['p1']),
+      reviewedCounts: { s1: 1 },
+    });
+    expect(q).toHaveLength(0);
+  });
 });
