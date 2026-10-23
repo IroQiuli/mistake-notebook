@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type {
   Asset,
+  CaptureDraft,
   Card,
   Chapter,
   Ink,
@@ -23,6 +24,7 @@ export class AppDb extends Dexie {
   inks!: Table<Ink, string>;
   scratch!: Table<Scratch, string>;
   settings!: Table<Setting, string>;
+  drafts!: Table<CaptureDraft, string>;
 
   constructor() {
     super('cuotiben');
@@ -37,6 +39,9 @@ export class AppDb extends Dexie {
       inks: 'id, ownerId, ownerType, createdAt',
       scratch: 'id, updatedAt',
       settings: 'key',
+    });
+    this.version(2).stores({
+      drafts: 'id, createdAt',
     });
   }
 }

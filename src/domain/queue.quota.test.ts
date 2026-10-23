@@ -55,6 +55,14 @@ describe('每科每日题量', () => {
     expect(q.filter((x) => x.auto).map((x) => x.problem.id)).toEqual(['later1', 'later2']);
   });
 
+  it('未复习的新题（state: 0）在未来到期时，绝不作为 filler 拉进今日待写清单', () => {
+    const ps = [problem({ id: 'due1' }), problem({ id: 'new_future', createdAt: T0 })];
+    const cs = [card('due1', T0 - DAY), card('new_future', T0 + DAY, 0)];
+    const q = buildQueue(ps, cs, { now: T0, quotas: { s1: 5 }, interleave: false });
+    expect(q.map((x) => x.problem.id)).toEqual(['due1']);
+    expect(q.find((x) => x.problem.id === 'new_future')).toBeUndefined();
+  });
+
   it('没设题量的科目照旧全部到期', () => {
     const ps = [
       problem({ id: 'a1', subjectId: 's1' }),

@@ -154,7 +154,11 @@ function applyQuotas(
     out.push(...taken);
 
     if (taken.length < remainingQuota) {
-      const fillers = (bySubjectLater.get(sid) ?? [])
+      // 严禁将尚未经过初次复习的新题（state === 0）当做 filler 提前复习拉入今日清单
+      const eligibleLater = (bySubjectLater.get(sid) ?? []).filter(
+        (it) => it.card.state !== 0
+      );
+      const fillers = eligibleLater
         .slice(0, remainingQuota - taken.length)
         .map((it) => ({ ...it, auto: true }));
       out.push(...fillers);

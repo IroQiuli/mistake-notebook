@@ -165,4 +165,10 @@ export interface Setting {
   value: unknown;
 }
 
+export interface CaptureDraft {
+  id: ID;
+  blob: Blob;
+  createdAt: number;
+}
+
 export type ProblemStatus = 'all' | 'due' | 'new' | 'archived';

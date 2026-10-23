@@ -1,8 +1,15 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronDown, Plus } from 'lucide-react';
+import { Check, ChevronDown, Minus, Plus } from 'lucide-react';
 import type { Chapter, Mastery, SourceKind, Subject, Topic } from '../../domain/types';
 import { ERROR_TAGS, MASTERY_LEVELS, masteryTextColor } from '../../domain/taxonomy';
 import { createChapter, createTopic } from '../../storage/problems';
+import {
+  calcInitialDue,
+  weightFromMastery,
+  weightLabel,
+  weightToInitialReviewDays,
+} from '../../domain/weight';
+import { formatToday } from '../../domain/time';
 import { cn } from '../../ui/cn';
 import { Button } from '../../ui/Button';
 
@@ -19,6 +26,8 @@ export interface MetaValue {
   errorTags: string[];
   /** 掌握程度：1 完全不会 … 4 已掌握 */
   mastery?: Mastery;
+  /** 权重 0~10，越高排期越靠后 */
+  weight?: number;
   /** 自定义标题；留空时列表用「章节 · 第 N 题 · 日期」 */
   title?: string;
 }
@@ -255,7 +264,10 @@ export function MetadataFields({
                   <button
                     key={m.level}
                     type="button"
-                    onClick={() => set({ mastery: active ? undefined : m.level })}
+                    onClick={() => {
+                      const next = active ? undefined : m.level;
+                      set({ mastery: next, weight: weightFromMastery(next) });
+                    }}
                     className={cn(
                       'h-9 flex-1 rounded-lg border text-xs transition-colors',
                       active ? 'border-transparent font-medium' : 'border-zinc-200 text-zinc-500'
@@ -273,6 +285,56 @@ export function MetadataFields({
             </div>
             <p className="mt-1 text-[10px] text-zinc-400">再点一次可以取消分级</p>
           </div>
+
+          {/* 权重调节与首重复习预测 */}
+          {(() => {
+            const effectiveWeight = value.weight ?? weightFromMastery(value.mastery);
+            const reviewDays = weightToInitialReviewDays(effectiveWeight);
+            const dueTs = calcInitialDue(effectiveWeight, Date.now());
+            const dueDateStr = formatToday(dueTs);
+            return (
+              <div className="rounded-xl border border-orange-100 bg-orange-50/50 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-zinc-700">复习权重</span>
+                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700">
+                      {effectiveWeight} · {weightLabel(effectiveWeight)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => set({ weight: Math.max(0, effectiveWeight - 1) })}
+                      disabled={effectiveWeight <= 0}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 active:bg-zinc-50 disabled:opacity-40"
+                      aria-label="降低权重"
+                    >
+                      <Minus size={13} />
+                    </button>
+                    <span className="w-6 text-center text-xs font-semibold tabular-nums text-zinc-800">
+                      {effectiveWeight}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => set({ weight: Math.min(10, effectiveWeight + 1) })}
+                      disabled={effectiveWeight >= 10}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 active:bg-zinc-50 disabled:opacity-40"
+                      aria-label="提高权重"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-500">
+                  <span>下次复习安排：</span>
+                  <span className="font-medium text-orange-600">
+                    {reviewDays === 1 ? '明天' : `${reviewDays} 天后`}
+                    <span className="text-zinc-400 font-normal ml-1">({dueDateStr})</span>
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           <div>
             <span className="mb-1.5 block text-xs font-medium text-zinc-500">难度</span>

@@ -1,18 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Clipboard, FileText, Image as ImageIcon, SlidersHorizontal } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { Camera, Clipboard, FileText, Image as ImageIcon, Layers, SlidersHorizontal } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import { useToast } from '../../ui/Toast';
+import { db, setSetting } from '../../storage/db';
 import { putAsset } from '../../storage/assets';
 import { createProblem } from '../../storage/problems';
-import { setSetting } from '../../storage/db';
+import { addDraft, addDrafts, clearAllDrafts, deleteDraft } from '../../storage/drafts';
 import { Cropper } from './Cropper';
 import { ProblemForm } from './ProblemForm';
 import { useBack, useGo } from '../../hooks/useBack';
-import { defaultMeta } from './defaultMeta';
+import { defaultMeta, incrementNo } from './defaultMeta';
+import { DraftInbox } from './DraftInbox';
 import { PdfPicker } from './PdfPicker';
 import { loadPdf, type PdfDoc } from './pdf';
 import type { MetaValue } from './MetadataFields';
+import type { CaptureDraft } from '../../domain/types';
+import { weightFromMastery, weightToInitialReviewDays } from '../../domain/weight';
 import {
   DEFAULT_ENHANCE,
   buildFilter,
@@ -46,8 +51,13 @@ export default function CapturePage() {
   const go = useGo();
   const toast = useToast();
   const cameraRef = useRef<HTMLInputElement>(null);
+  const continuousCameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
+
+  const drafts = useLiveQuery(() => db.drafts.orderBy('createdAt').toArray(), [], []) as CaptureDraft[];
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [sessionPreset, setSessionPreset] = useState<Partial<MetaValue> | null>(null);
 
   const [stage, setStage] = useState<Stage>('pick');
   const [busy, setBusy] = useState(false);
@@ -80,7 +90,49 @@ export default function CapturePage() {
   };
 
   const onFile = async (file?: File) => {
-    if (file) await loadBlob(file);
+    if (file) {
+      setActiveDraftId(null);
+      await loadBlob(file);
+    }
+  };
+
+  const onContinuousCamera = async (file?: File) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      await addDraft(file);
+      toast.show('已存入草稿箱，可继续拍摄', 'success');
+    } catch (err) {
+      console.error(err);
+      toast.show('保存草稿失败', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onGalleryFiles = async (files?: FileList | null) => {
+    if (!files || files.length === 0) return;
+    if (files.length === 1) {
+      setActiveDraftId(null);
+      await loadBlob(files[0]);
+      return;
+    }
+    setBusy(true);
+    try {
+      const arr = Array.from(files);
+      await addDrafts(arr);
+      toast.show(`已将 ${arr.length} 张图片存入草稿箱`, 'success');
+    } catch (err) {
+      console.error(err);
+      toast.show('存入草稿箱失败', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const selectDraft = async (d: CaptureDraft) => {
+    setActiveDraftId(d.id);
+    await loadBlob(d.blob);
   };
 
   const onPdfFile = async (file?: File) => {
@@ -153,7 +205,7 @@ export default function CapturePage() {
     return { blob, width: canvas.width, height: canvas.height, url: URL.createObjectURL(blob) };
   };
 
-  /** 框完直接进入「选分类」，中间不再让用户做别的操作 */
+  /** 框完直接进入「选分类」，自动继承试卷与年份等属性，题号自增 */
   const confirmCrop = async (r: Rect) => {
     setRect(r);
     setBusy(true);
@@ -163,7 +215,7 @@ export default function CapturePage() {
       if (crop) URL.revokeObjectURL(crop.url);
       setCrop(next);
       setDraft(DEFAULT_ENHANCE);
-      setMeta(await defaultMeta());
+      setMeta(await defaultMeta(sessionPreset ?? undefined));
       setStage('form');
     } finally {
       setBusy(false);
@@ -205,21 +257,42 @@ export default function CapturePage() {
       answerAssetIds: [],
     });
 
+    if (activeDraftId) {
+      await deleteDraft(activeDraftId);
+      setActiveDraftId(null);
+    }
+
+    setSessionPreset({
+      subjectId: value.subjectId,
+      chapterId: value.chapterId,
+      sourceYear: value.sourceYear,
+      sourcePaper: value.sourcePaper,
+      sourceKind: value.sourceKind,
+      sourceNo: incrementNo(value.sourceNo),
+    });
+
     await setSetting('lastSubjectId', value.subjectId);
     await setSetting('lastChapterId', value.chapterId);
     setSavedId(id);
     setMeta(value);
     setStage('done');
-    toast.show('已加入今日复习队列', 'success');
+    const effWeight = value.weight ?? weightFromMastery(value.mastery);
+    const days = weightToInitialReviewDays(effWeight);
+    toast.show(
+      `错题录入成功（已安排在 ${days === 1 ? '明天' : `${days} 天后`} 复习）`,
+      'success'
+    );
   };
 
   const reset = () => {
     if (crop) URL.revokeObjectURL(crop.url);
+    if (source) URL.revokeObjectURL(source.url);
     setSource(null);
     setCrop(null);
     setRect(null);
     setMeta(null);
     setSavedId(null);
+    setActiveDraftId(null);
     setStage('pick');
   };
 
@@ -233,7 +306,7 @@ export default function CapturePage() {
           {stage === 'pick' && '选一张图片，框出这道题'}
           {stage === 'crop' && '把这道题框出来'}
           {stage === 'form' && '选一下科目和章节，就可以保存了'}
-          {stage === 'done' && '已进入今日复习队列'}
+          {stage === 'done' && '已保存，已根据权重排入复习日历'}
         </p>
       </header>
 
@@ -260,6 +333,16 @@ export default function CapturePage() {
 
       {stage === 'pick' && (
         <div className="space-y-3">
+          {/* 待处理草稿箱 */}
+          {drafts && drafts.length > 0 && (
+            <DraftInbox
+              drafts={drafts}
+              onSelect={(d) => void selectDraft(d)}
+              onClear={() => void clearAllDrafts()}
+              onContinuousCamera={() => continuousCameraRef.current?.click()}
+            />
+          )}
+
           <input
             ref={cameraRef}
             type="file"
@@ -269,40 +352,73 @@ export default function CapturePage() {
             onChange={(e) => void onFile(e.target.files?.[0])}
           />
           <input
+            ref={continuousCameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => void onContinuousCamera(e.target.files?.[0])}
+          />
+          <input
             ref={galleryRef}
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
-            onChange={(e) => void onFile(e.target.files?.[0])}
+            onChange={(e) => void onGalleryFiles(e.target.files)}
           />
 
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => cameraRef.current?.click()}
-            className="flex w-full items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-5 text-left active:bg-zinc-50 disabled:opacity-60"
-          >
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
-              <Camera size={24} />
-            </span>
-            <span>
-              <span className="block text-sm font-medium text-zinc-900">拍照</span>
-              <span className="block text-xs text-zinc-500">对着纸质卷子拍一张</span>
-            </span>
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => cameraRef.current?.click()}
+              className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-left active:bg-zinc-50 disabled:opacity-60 shadow-xs transition-colors"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
+                <Camera size={22} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-zinc-900">拍照录题</span>
+                <span className="block truncate text-xs text-zinc-500">拍一张立即裁剪</span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => continuousCameraRef.current?.click()}
+              className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-left active:bg-amber-100/50 disabled:opacity-60 shadow-xs transition-colors"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+                <Layers size={22} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-amber-950">极速连拍</span>
+                <span className="block truncate text-xs text-amber-700/70">多题连拍存草稿</span>
+              </span>
+            </button>
+          </div>
 
           <button
             type="button"
             disabled={busy}
             onClick={() => galleryRef.current?.click()}
-            className="flex w-full items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-5 text-left active:bg-zinc-50 disabled:opacity-60"
+            className="flex w-full items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-4 text-left active:bg-zinc-50 disabled:opacity-60 shadow-xs transition-colors"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600">
-              <ImageIcon size={24} />
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600">
+              <ImageIcon size={22} />
             </span>
             <span>
-              <span className="block text-sm font-medium text-zinc-900">从相册选</span>
-              <span className="block text-xs text-zinc-500">截图、拍照都行</span>
+              <span className="flex items-center gap-1.5 text-sm font-medium text-zinc-900">
+                从相册选图
+                <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] text-orange-700 font-normal">
+                  支持多选入箱
+                </span>
+              </span>
+              <span className="block text-xs text-zinc-500">
+                选 1 张直接裁切，选多张自动存入草稿箱稍后批量录
+              </span>
             </span>
           </button>
 
@@ -332,7 +448,7 @@ export default function CapturePage() {
             type="button"
             disabled={busy}
             onClick={() => pdfRef.current?.click()}
-            className="flex w-full items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-5 text-left active:bg-zinc-50 disabled:opacity-60"
+            className="flex w-full items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-5 text-left active:bg-zinc-50 disabled:opacity-60 shadow-xs"
           >
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600">
               <FileText size={24} />
@@ -358,12 +474,23 @@ export default function CapturePage() {
       )}
 
       {stage === 'crop' && source && (
-        <Cropper
-          src={source.url}
-          naturalWidth={source.width}
-          naturalHeight={source.height}
-          onConfirm={(r) => void confirmCrop(r)}
-        />
+        <div className="space-y-2">
+          {activeDraftId && (
+            <div className="flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200/80 px-3 py-1.5 text-xs text-amber-900">
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                正在处理草稿箱中的图片
+              </span>
+              <span className="text-[11px] text-amber-700">保存后自动移除此草稿</span>
+            </div>
+          )}
+          <Cropper
+            src={source.url}
+            naturalWidth={source.width}
+            naturalHeight={source.height}
+            onConfirm={(r) => void confirmCrop(r)}
+          />
+        </div>
       )}
 
       {stage === 'form' && crop && meta && (
@@ -396,17 +523,48 @@ export default function CapturePage() {
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center">
             <div className="text-3xl">✅</div>
             <p className="mt-2 text-sm font-medium text-emerald-800">
-              已保存，明天起会自动排期复习
+              已保存，已根据掌握程度自动排期复习
             </p>
           </div>
-          <Button variant="primary" block size="lg" onClick={reset}>
-            继续录下一题
+
+          {/* 草稿箱优先流 */}
+          {drafts && drafts.length > 0 && (
+            <Button
+              variant="primary"
+              block
+              size="lg"
+              onClick={() => void selectDraft(drafts[0])}
+            >
+              处理草稿箱下一张（剩余 {drafts.length} 张）
+            </Button>
+          )}
+
+          {/* 同一页原图连续截题流 */}
+          {source && (
+            <Button
+              variant={drafts && drafts.length > 0 ? 'secondary' : 'primary'}
+              block
+              size="lg"
+              onClick={() => {
+                if (crop) URL.revokeObjectURL(crop.url);
+                setCrop(null);
+                setRect(null);
+                setSavedId(null);
+                setStage('crop');
+              }}
+            >
+              在当前原图继续截下一题
+            </Button>
+          )}
+
+          <Button variant="secondary" block size="lg" onClick={reset}>
+            拍新图 / 选其他图片
           </Button>
           <Button block size="lg" disabled={!savedId} onClick={() => go(`/problem/${savedId}`)}>
-            查看这道题
+            查看刚录入的题
           </Button>
           <Button variant="ghost" block onClick={back}>
-            返回上一页
+            返回首页
           </Button>
         </div>
       )}

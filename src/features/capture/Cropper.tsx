@@ -13,13 +13,15 @@ interface CropperProps {
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
-type Mode = 'idle' | 'draw' | 'move' | 'pinch';
+type Mode = 'idle' | 'draw' | 'move' | 'pinch' | 'resize';
+type Handle = 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'w' | 'e';
 
 /**
  * 框选器：
  * - 图片默认缩到一屏内，长卷子也能直接框到最底部
+ * - 8 点调节手柄：4 个角自由调节，4 条边上下左右拉伸长宽
  * - 双指缩放 / 拖动移动视图（缩放后单指在框外拖动画新框）
- * - 单指按住已有框可整体拖动
+ * - 单指按住已有框可整体平移
  * - 坐标始终换算到图片自身，缩放不影响框选结果
  */
 export function Cropper({ src, naturalWidth, naturalHeight, onConfirm }: CropperProps) {
@@ -30,6 +32,8 @@ export function Cropper({ src, naturalWidth, naturalHeight, onConfirm }: Cropper
   const [zoomed, setZoomed] = useState(false);
 
   const mode = useRef<Mode>('idle');
+  const activeHandle = useRef<Handle | null>(null);
+  const resizeStart = useRef<{ norm: { x: number; y: number }; rect: Rect } | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const drawStart = useRef<{ x: number; y: number } | null>(null);
   const moveStart = useRef<{ x: number; y: number; rect: Rect } | null>(null);
@@ -111,6 +115,17 @@ export function Cropper({ src, naturalWidth, naturalHeight, onConfirm }: Cropper
     [rect]
   );
 
+  const onHandleDown = (e: React.PointerEvent, handle: Handle) => {
+    e.stopPropagation();
+    (wrapRef.current as HTMLElement)?.setPointerCapture?.(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    mode.current = 'resize';
+    activeHandle.current = handle;
+    if (rect) {
+      resizeStart.current = { norm: toNorm(e.clientX, e.clientY), rect: { ...rect } };
+    }
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -126,6 +141,8 @@ export function Cropper({ src, naturalWidth, naturalHeight, onConfirm }: Cropper
       mode.current = 'pinch';
       drawStart.current = null;
       moveStart.current = null;
+      activeHandle.current = null;
+      resizeStart.current = null;
       return;
     }
 
@@ -167,6 +184,42 @@ export function Cropper({ src, naturalWidth, naturalHeight, onConfirm }: Cropper
       return;
     }
 
+    if (mode.current === 'resize' && resizeStart.current && activeHandle.current) {
+      const curr = toNorm(e.clientX, e.clientY);
+      const start = resizeStart.current;
+      const handle = activeHandle.current;
+      const dx = curr.x - start.norm.x;
+      const dy = curr.y - start.norm.y;
+
+      let left = start.rect.x;
+      let top = start.rect.y;
+      let right = start.rect.x + start.rect.w;
+      let bottom = start.rect.y + start.rect.h;
+
+      const MIN_SIZE = 0.015;
+
+      if (handle === 'nw' || handle === 'w' || handle === 'sw') {
+        left = clamp(left + dx, 0, right - MIN_SIZE);
+      }
+      if (handle === 'ne' || handle === 'e' || handle === 'se') {
+        right = clamp(right + dx, left + MIN_SIZE, 1);
+      }
+      if (handle === 'nw' || handle === 'n' || handle === 'ne') {
+        top = clamp(top + dy, 0, bottom - MIN_SIZE);
+      }
+      if (handle === 'sw' || handle === 's' || handle === 'se') {
+        bottom = clamp(bottom + dy, top + MIN_SIZE, 1);
+      }
+
+      setRect({
+        x: left,
+        y: top,
+        w: right - left,
+        h: bottom - top,
+      });
+      return;
+    }
+
     if (mode.current === 'move' && moveStart.current && rect) {
       const norm = toNorm(e.clientX, e.clientY);
       const start = moveStart.current;
@@ -194,11 +247,15 @@ export function Cropper({ src, naturalWidth, naturalHeight, onConfirm }: Cropper
     pointers.current.delete(e.pointerId);
     if (pointers.current.size === 0) {
       mode.current = 'idle';
+      activeHandle.current = null;
+      resizeStart.current = null;
       drawStart.current = null;
       moveStart.current = null;
       pinchStart.current = null;
     } else if (pointers.current.size === 1) {
       mode.current = 'idle';
+      activeHandle.current = null;
+      resizeStart.current = null;
       pinchStart.current = null;
     }
   };
@@ -246,15 +303,72 @@ export function Cropper({ src, naturalWidth, naturalHeight, onConfirm }: Cropper
             />
             {rect && (
               <div
-                className="pointer-events-none absolute border-2 border-orange-400 bg-orange-400/10"
+                className="absolute border-2 border-orange-500 bg-orange-400/10 cursor-move"
                 style={{
                   left: rect.x * layout.dw,
                   top: rect.y * layout.dh,
                   width: rect.w * layout.dw,
                   height: rect.h * layout.dh,
-                  boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)',
+                  boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
                 }}
-              />
+              >
+                {/* 辅助参考网格线 (三等分虚线) */}
+                <div className="pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3 opacity-30">
+                  <div className="border-b border-r border-dashed border-orange-300" />
+                  <div className="border-b border-r border-dashed border-orange-300" />
+                  <div className="border-b border-dashed border-orange-300" />
+                  <div className="border-b border-r border-dashed border-orange-300" />
+                  <div className="border-b border-r border-dashed border-orange-300" />
+                  <div className="border-b border-dashed border-orange-300" />
+                  <div className="border-r border-dashed border-orange-300" />
+                  <div className="border-r border-dashed border-orange-300" />
+                  <div />
+                </div>
+
+                {/* 4 个角落手柄 (NW, NE, SW, SE) */}
+                <div
+                  onPointerDown={(e) => onHandleDown(e, 'nw')}
+                  className="absolute -left-2 -top-2 h-4 w-4 rounded-full border-2 border-orange-500 bg-white shadow-xs cursor-nwse-resize after:absolute after:-inset-3 after:content-['']"
+                  title="拖动左上角"
+                />
+                <div
+                  onPointerDown={(e) => onHandleDown(e, 'ne')}
+                  className="absolute -right-2 -top-2 h-4 w-4 rounded-full border-2 border-orange-500 bg-white shadow-xs cursor-nesw-resize after:absolute after:-inset-3 after:content-['']"
+                  title="拖动右上角"
+                />
+                <div
+                  onPointerDown={(e) => onHandleDown(e, 'sw')}
+                  className="absolute -bottom-2 -left-2 h-4 w-4 rounded-full border-2 border-orange-500 bg-white shadow-xs cursor-nesw-resize after:absolute after:-inset-3 after:content-['']"
+                  title="拖动左下角"
+                />
+                <div
+                  onPointerDown={(e) => onHandleDown(e, 'se')}
+                  className="absolute -bottom-2 -right-2 h-4 w-4 rounded-full border-2 border-orange-500 bg-white shadow-xs cursor-nwse-resize after:absolute after:-inset-3 after:content-['']"
+                  title="拖动右下角"
+                />
+
+                {/* 4 条边缘长宽手柄 (N, S, W, E) */}
+                <div
+                  onPointerDown={(e) => onHandleDown(e, 'n')}
+                  className="absolute left-1/2 -top-1.5 h-2.5 w-7 -translate-x-1/2 rounded-full border border-orange-500 bg-white shadow-xs cursor-ns-resize after:absolute after:-inset-3 after:content-['']"
+                  title="拖动上边缘调整高"
+                />
+                <div
+                  onPointerDown={(e) => onHandleDown(e, 's')}
+                  className="absolute -bottom-1.5 left-1/2 h-2.5 w-7 -translate-x-1/2 rounded-full border border-orange-500 bg-white shadow-xs cursor-ns-resize after:absolute after:-inset-3 after:content-['']"
+                  title="拖动下边缘调整高"
+                />
+                <div
+                  onPointerDown={(e) => onHandleDown(e, 'w')}
+                  className="absolute -left-1.5 top-1/2 h-7 w-2.5 -translate-y-1/2 rounded-full border border-orange-500 bg-white shadow-xs cursor-ew-resize after:absolute after:-inset-3 after:content-['']"
+                  title="拖动左边缘调整宽"
+                />
+                <div
+                  onPointerDown={(e) => onHandleDown(e, 'e')}
+                  className="absolute -right-1.5 top-1/2 h-7 w-2.5 -translate-y-1/2 rounded-full border border-orange-500 bg-white shadow-xs cursor-ew-resize after:absolute after:-inset-3 after:content-['']"
+                  title="拖动右边缘调整宽"
+                />
+              </div>
             )}
           </div>
         )}
@@ -292,7 +406,7 @@ export function Cropper({ src, naturalWidth, naturalHeight, onConfirm }: Cropper
         {!rect && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-4">
             <span className="rounded-full bg-black/60 px-3 py-1.5 text-center text-xs leading-relaxed text-white">
-              在题目上拖出选区；双指可缩放；按住框内可拖动
+              拖拽框选题目；可拉动四个角与上下边长宽；按住框内可平移
             </span>
           </div>
         )}
@@ -300,7 +414,7 @@ export function Cropper({ src, naturalWidth, naturalHeight, onConfirm }: Cropper
 
       <div className="flex gap-3">
         <Button variant="secondary" block onClick={() => setRect(null)} disabled={!rect}>
-          重画
+          重画选区
         </Button>
         <Button variant="primary" block disabled={!valid} onClick={() => valid && onConfirm(rect!)}>
           用这个区域
@@ -308,7 +422,7 @@ export function Cropper({ src, naturalWidth, naturalHeight, onConfirm }: Cropper
       </div>
 
       <p className="text-center text-[11px] text-zinc-400">
-        图片已缩到一屏内；放大后单指拖动画框、双指拖动平移
+        已自动全屏适配；支持四角和边缘长宽自由拉伸、双指缩放平移
       </p>
     </div>
   );
