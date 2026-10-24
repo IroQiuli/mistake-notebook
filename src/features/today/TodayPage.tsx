@@ -175,32 +175,73 @@ export default function TodayPage() {
     return { days, year: examYear };
   }, [now]);
 
+  const theme = useLiveQuery(() => getSetting<string>('theme', 'miku'), [], 'miku');
+  const isMiku = theme === 'miku';
+
   return (
     <div className="space-y-4">
       <header className="flex items-end justify-between pt-1">
         <div>
-          <div className="text-xs text-zinc-500">{formatToday(now)}</div>
+          <div className="text-xs text-zinc-500 flex items-center gap-1.5">
+            <span>{formatToday(now)}</span>
+            {isMiku && (
+              <span className="rounded-full bg-teal-100 px-1.5 py-0.2 text-[9px] font-bold text-teal-700">
+                01 伴学中
+              </span>
+            )}
+          </div>
           <h1 className="mt-0.5 text-[26px] font-semibold tracking-tight text-zinc-900">
             今天要写的
           </h1>
         </div>
         {streak > 0 && (
-          <div className="mb-1 flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-600">
-            <Flame size={13} />
+          <div
+            className={cn(
+              'mb-1 flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium',
+              isMiku
+                ? 'bg-teal-50 text-teal-600 ring-1 ring-teal-200/50'
+                : 'bg-orange-50 text-orange-600'
+            )}
+          >
+            <Flame size={13} className={isMiku ? 'text-teal-500' : 'text-orange-500'} />
             连续 {streak} 天
           </div>
         )}
       </header>
 
       {/* 考研初试倒计时看板 */}
-      <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/40 border border-orange-200/80 px-3.5 py-2 text-xs shadow-xs">
-        <div className="flex items-center gap-1.5 font-medium text-orange-900">
-          <span className="flex h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+      <div
+        className={cn(
+          'flex items-center justify-between rounded-xl border px-3.5 py-2 text-xs shadow-xs transition-colors',
+          isMiku
+            ? 'bg-gradient-to-r from-teal-50/90 via-cyan-50/70 to-pink-50/50 border-teal-200/80'
+            : 'bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/40 border-orange-200/80'
+        )}
+      >
+        <div className="flex items-center gap-1.5 font-medium text-zinc-800">
+          <span
+            className={cn(
+              'flex h-2 w-2 rounded-full animate-pulse',
+              isMiku ? 'bg-teal-500' : 'bg-orange-500'
+            )}
+          />
+          {isMiku && (
+            <span className="rounded bg-teal-500/10 px-1 py-0.2 text-[9px] font-black text-teal-600 ring-1 ring-teal-500/20">
+              MIKU
+            </span>
+          )}
           <span>目标 {examCountdown.year} 考研初试</span>
         </div>
         <div className="flex items-baseline gap-1">
           <span className="text-[11px] text-zinc-500">倒计时</span>
-          <span className="text-base font-bold tabular-nums text-orange-600">{examCountdown.days}</span>
+          <span
+            className={cn(
+              'text-base font-bold tabular-nums',
+              isMiku ? 'text-teal-600' : 'text-orange-600'
+            )}
+          >
+            {examCountdown.days}
+          </span>
           <span className="text-[11px] text-zinc-500">天</span>
         </div>
       </div>
@@ -222,7 +263,11 @@ export default function TodayPage() {
       <section className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
         <div
           className="pointer-events-none absolute -right-12 -top-16 h-40 w-40 rounded-full opacity-70"
-          style={{ background: 'radial-gradient(circle, #ffedd5 0%, rgba(255,255,255,0) 70%)' }}
+          style={{
+            background: isMiku
+              ? 'radial-gradient(circle, #ccfbf1 0%, rgba(255,255,255,0) 70%)'
+              : 'radial-gradient(circle, #ffedd5 0%, rgba(255,255,255,0) 70%)',
+          }}
         />
         <div
           onClick={() => queue.length > 0 && setShowPendingDialog(true)}
@@ -236,20 +281,32 @@ export default function TodayPage() {
             <div className="flex items-baseline gap-1.5">
               <span
                 data-testid="queue-count"
-                className="text-[44px] font-semibold leading-none tracking-tight tabular-nums text-zinc-900 group-hover:text-orange-600 transition-colors"
+                className={cn(
+                  'text-[44px] font-semibold leading-none tracking-tight tabular-nums text-zinc-900 transition-colors',
+                  isMiku ? 'group-hover:text-teal-600' : 'group-hover:text-orange-600'
+                )}
               >
                 {queue.length}
               </span>
               <span className="text-sm text-zinc-500">道</span>
               {queue.length > 0 && (
-                <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-600 group-hover:bg-orange-100 transition-colors">
+                <span
+                  className={cn(
+                    'ml-1.5 inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors',
+                    isMiku
+                      ? 'bg-teal-50 text-teal-600 group-hover:bg-teal-100 ring-1 ring-teal-200/50'
+                      : 'bg-orange-50 text-orange-600 group-hover:bg-orange-100'
+                  )}
+                >
                   <ListOrdered size={12} />
                   待写清单
                 </span>
               )}
             </div>
             <div className="mt-1.5 text-sm text-zinc-600">
-              {queue.length > 0 ? '今天要写（待完成）' : '今日待写已清空'}
+              {queue.length > 0
+                ? (isMiku ? '今日错题待完成 · 和 Miku 一起攻克' : '今天要写（待完成）')
+                : '今日待写已清空'}
             </div>
             <div className="mt-1 text-[11px] leading-relaxed text-zinc-400">
               {deferred > 0 ? (
@@ -259,7 +316,7 @@ export default function TodayPage() {
                 </>
               ) : dueCount === 0 ? (
                 queue.length === 0 ? (
-                  '今天计划的错题已全部写完！'
+                  isMiku ? '39！今天计划的错题已全部搞定！' : '今天计划的错题已全部写完！'
                 ) : (
                   '按排期自动拉取未到期题目'
                 )
@@ -273,9 +330,13 @@ export default function TodayPage() {
 
         {queue.length === 0 && todayReviewed > 0 && (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-center">
-            <div className="text-sm font-semibold text-emerald-800">🎉 今日错题已全部清空！</div>
+            <div className="text-sm font-semibold text-emerald-800">
+              {isMiku ? '🎉 39！今日错题已全部清空！' : '🎉 今日错题已全部清空！'}
+            </div>
             <p className="mt-0.5 text-xs text-emerald-600">
-              今日已复习 {todayReviewed} 道题，保持稳健节奏，稳步上岸！
+              {isMiku
+                ? `今日已复习 ${todayReviewed} 道题，保持稳健节奏，Miku 陪你稳步上岸！`
+                : `今日已复习 ${todayReviewed} 道题，保持稳健节奏，稳步上岸！`}
             </p>
           </div>
         )}

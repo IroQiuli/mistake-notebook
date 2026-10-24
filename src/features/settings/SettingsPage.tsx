@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronDown, Download, HardDrive, Lock, Plus, ShieldCheck, Upload } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Download,
+  Globe,
+  HardDrive,
+  Lock,
+  Palette,
+  Plus,
+  ShieldCheck,
+  Sliders,
+  Sparkles,
+  Upload,
+} from 'lucide-react';
 import { db, getSetting, setSetting } from '../../storage/db';
 import { backupFilename, downloadBlob, exportBackup, importBackup } from '../../storage/backup';
 import {
@@ -62,7 +75,11 @@ export default function SettingsPage() {
   const problems = useLiveQuery(() => db.problems.count(), [], 0);
   const assets = useLiveQuery(() => db.assets.count(), [], 0);
   const lastBackupAt = useLiveQuery(() => getSetting<number>('lastBackupAt', 0), [], 0);
+  const theme = useLiveQuery(() => getSetting<string>('theme', 'miku'), [], 'miku');
   const wallpaper = useLiveQuery(() => getSetting<string>('wallpaper', ''), [], '');
+  const wallpaperBlur = useLiveQuery(() => getSetting<number>('wallpaperBlur', 0), [], 0);
+  const wallpaperMask = useLiveQuery(() => getSetting<number>('wallpaperMask', 0.08), [], 0.08);
+  const [onlineUrl, setOnlineUrl] = useState('');
   const wallRef = useRef<HTMLInputElement>(null);
 
   const refreshUsage = () => {
@@ -304,46 +321,244 @@ export default function SettingsPage() {
         </p>
       </Section>
 
-      <Section title="外观">
-        <div className="flex items-center gap-3">
-          <div
-            className="h-16 w-24 shrink-0 rounded-lg bg-zinc-100 ring-1 ring-zinc-200"
-            style={
-              wallpaper
-                ? { backgroundImage: `url(${wallpaper})`, backgroundSize: 'cover' }
-                : undefined
-            }
-          >
-            {!wallpaper && (
-              <div className="flex h-full items-center justify-center text-[10px] text-zinc-400">
-                无壁纸
-              </div>
-            )}
+      <Section title="外观与主题 (初音未来 4K Demo)">
+        {/* 主题选择卡片 */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-700 flex items-center gap-1.5">
+              <Palette size={14} className="text-teal-500" />
+              主题风格
+            </span>
+            <span className="text-[10px] text-zinc-400">随时可在两种风格间自由切换</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm text-zinc-800">背景壁纸</div>
-            <div className="mt-0.5 text-[11px] leading-relaxed text-zinc-400">
-              压缩到 1080px 宽再存，卡片仍是白底不影响阅读
-            </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* 初音未来主题卡片 */}
+            <button
+              type="button"
+              onClick={async () => {
+                await setSetting('theme', 'miku');
+                toast.show('已开启 初音未来 (01 MIKU) 主题', 'success');
+              }}
+              className={cn(
+                'relative flex flex-col items-start rounded-xl p-3 text-left transition-all border',
+                theme === 'miku'
+                  ? 'border-teal-400 bg-teal-50/70 shadow-xs ring-1 ring-teal-400'
+                  : 'border-zinc-200 bg-white hover:border-zinc-300'
+              )}
+            >
+              <div className="flex w-full items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md miku-neon-badge text-[10px] font-black text-white">
+                    01
+                  </span>
+                  <span className="text-xs font-bold text-zinc-800">初音未来</span>
+                </div>
+                {theme === 'miku' && (
+                  <span className="flex items-center gap-0.5 rounded-full bg-teal-600 px-1.5 py-0.2 text-[9px] font-medium text-white">
+                    <Check size={10} /> 使用中
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-zinc-500 leading-tight">
+                4K 毛玻璃 · 39C5BB 葱绿
+              </div>
+            </button>
+
+            {/* 经典橙色主题卡片 */}
+            <button
+              type="button"
+              onClick={async () => {
+                await setSetting('theme', 'default');
+                toast.show('已切回 经典橙色 主题', 'info');
+              }}
+              className={cn(
+                'relative flex flex-col items-start rounded-xl p-3 text-left transition-all border',
+                theme !== 'miku'
+                  ? 'border-orange-400 bg-orange-50/70 shadow-xs ring-1 ring-orange-400'
+                  : 'border-zinc-200 bg-white hover:border-zinc-300'
+              )}
+            >
+              <div className="flex w-full items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-orange-500 text-[10px] font-bold text-white">
+                    错
+                  </span>
+                  <span className="text-xs font-bold text-zinc-800">经典考研橙</span>
+                </div>
+                {theme !== 'miku' && (
+                  <span className="flex items-center gap-0.5 rounded-full bg-orange-500 px-1.5 py-0.2 text-[9px] font-medium text-white">
+                    <Check size={10} /> 使用中
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-zinc-500 leading-tight">
+                原版简约 · 经典橙色与纯白
+              </div>
+            </button>
           </div>
         </div>
 
-        <div className="mt-3 flex gap-2">
-          <Button block onClick={() => wallRef.current?.click()}>
-            <Upload size={15} />
-            {wallpaper ? '换一张' : '上传壁纸'}
-          </Button>
-          {wallpaper && (
-            <Button
-              block
-              onClick={async () => {
-                await setSetting('wallpaper', '');
-                toast.show('已移除壁纸', 'info');
+        {/* 4K 壁纸库 (初音未来模式) */}
+        <div className="mt-4 pt-3.5 border-t border-zinc-100 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-700 flex items-center gap-1.5">
+              <Sparkles size={14} className="text-teal-500" />
+              精选 4K 初音壁纸库
+            </span>
+            <span className="text-[10px] text-zinc-400">超高清 3840×2160 原图</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              {
+                id: 'starry',
+                name: '星空浅葱',
+                tag: '4K · 推荐',
+                url: '/themes/miku/miku-starry-4k.jpg',
+              },
+              {
+                id: 'galaxy',
+                name: '宇宙银河',
+                tag: '4K · 璀璨',
+                url: '/themes/miku/miku-galaxy-4k.jpg',
+              },
+              {
+                id: 'classic',
+                name: '经典立绘',
+                tag: '4K · 标志',
+                url: '/themes/miku/miku-classic-4k.jpg',
+              },
+            ].map((preset) => {
+              const active =
+                wallpaper === preset.url ||
+                (!wallpaper && theme === 'miku' && preset.id === 'starry');
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={async () => {
+                    await setSetting('wallpaper', preset.url);
+                    toast.show(`已切换为「${preset.name}」4K壁纸`, 'success');
+                  }}
+                  className={cn(
+                    'group relative flex flex-col overflow-hidden rounded-xl border text-left transition-all',
+                    active
+                      ? 'border-teal-500 ring-2 ring-teal-400/60 shadow-sm'
+                      : 'border-zinc-200 hover:border-teal-300'
+                  )}
+                >
+                  <div
+                    className="h-16 w-full bg-cover bg-center transition-transform group-hover:scale-105"
+                    style={{ backgroundImage: `url(${preset.url})` }}
+                  />
+                  <div className="p-1.5 bg-white/95 backdrop-blur">
+                    <div className="text-[11px] font-medium text-zinc-800 truncate">
+                      {preset.name}
+                    </div>
+                    <div className="flex items-center justify-between text-[9px] text-teal-600 font-semibold">
+                      <span>{preset.tag}</span>
+                      {active && <Check size={10} />}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 网络 4K 图片 URL 输入 */}
+          <div className="rounded-xl bg-zinc-50 p-2.5 space-y-2">
+            <span className="text-[11px] font-medium text-zinc-600 flex items-center gap-1">
+              <Globe size={12} className="text-zinc-400" />
+              自定义在线 4K 壁纸链接
+            </span>
+            <div className="flex gap-1.5">
+              <input
+                type="url"
+                value={onlineUrl}
+                onChange={(e) => setOnlineUrl(e.target.value)}
+                placeholder="粘贴网络 4K 图片直链 (https://...)"
+                className="flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-400"
+              />
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={async () => {
+                  const trimmed = onlineUrl.trim();
+                  if (!trimmed || !/^https?:\/\//i.test(trimmed)) {
+                    return toast.show('请输入合法的 http/https 图片链接', 'error');
+                  }
+                  await setSetting('wallpaper', trimmed);
+                  setOnlineUrl('');
+                  toast.show('已应用网络 4K 壁纸', 'success');
+                }}
+              >
+                应用
+              </Button>
+            </div>
+          </div>
+
+          {/* 壁纸细节微调滑块 */}
+          <div className="space-y-2.5 pt-1">
+            <div className="flex items-center justify-between text-xs text-zinc-600">
+              <span className="flex items-center gap-1">
+                <Sliders size={12} className="text-zinc-400" />
+                壁纸模糊度（专注做题）
+              </span>
+              <span className="tabular-nums text-[11px] text-zinc-400">
+                {wallpaperBlur === 0 ? '原画极清' : `${wallpaperBlur}px 虚化`}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={10}
+              step={1}
+              value={wallpaperBlur}
+              onChange={async (e) => {
+                await setSetting('wallpaperBlur', Number(e.target.value));
               }}
-            >
-              移除
+              className="w-full accent-teal-500"
+            />
+
+            <div className="flex items-center justify-between text-xs text-zinc-600 pt-1">
+              <span>背景暗色遮罩（护眼与白字对比）</span>
+              <span className="tabular-nums text-[11px] text-zinc-400">
+                {Math.round(wallpaperMask * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={0.35}
+              step={0.02}
+              value={wallpaperMask}
+              onChange={async (e) => {
+                await setSetting('wallpaperMask', Number(e.target.value));
+              }}
+              className="w-full accent-teal-500"
+            />
+          </div>
+
+          {/* 本地上传与重置 */}
+          <div className="pt-2 flex gap-2">
+            <Button block onClick={() => wallRef.current?.click()} size="sm">
+              <Upload size={14} />
+              上传本地高清壁纸
             </Button>
-          )}
+            {wallpaper && (
+              <Button
+                block
+                size="sm"
+                onClick={async () => {
+                  await setSetting('wallpaper', '');
+                  toast.show('已重置为默认壁纸', 'info');
+                }}
+              >
+                恢复默认
+              </Button>
+            )}
+          </div>
         </div>
 
         <input
@@ -357,8 +572,9 @@ export default function SettingsPage() {
             e.target.value = '';
             if (!file) return;
             try {
-              const { canvas } = await prepareImage(file, 1080);
-              const blob = await canvasToBlob(canvas, 'image/jpeg', 0.82);
+              // 4K 级别高清适配，最大长边放宽至 3840
+              const { canvas } = await prepareImage(file, 3840);
+              const blob = await canvasToBlob(canvas, 'image/jpeg', 0.88);
               const dataUrl = await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(String(reader.result));
@@ -366,7 +582,7 @@ export default function SettingsPage() {
                 reader.readAsDataURL(blob);
               });
               await setSetting('wallpaper', dataUrl);
-              toast.show('壁纸已更新', 'success');
+              toast.show('4K 壁纸已更新', 'success');
             } catch (err) {
               console.error(err);
               toast.show('上传失败', 'error');

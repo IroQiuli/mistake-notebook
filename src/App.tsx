@@ -135,30 +135,78 @@ function Shell() {
   const location = useLocation();
   const isImmersive =
     location.pathname.startsWith('/review') || location.pathname.startsWith('/chapter');
-  const wallpaper = useLiveQuery(() => getSetting<string>('wallpaper', ''), [], '');
+  const theme = useLiveQuery(() => getSetting<string>('theme', 'miku'), [], 'miku');
+  const wallpaperSetting = useLiveQuery(() => getSetting<string>('wallpaper', ''), [], '');
+  const wallpaperBlur = useLiveQuery(() => getSetting<number>('wallpaperBlur', 0), [], 0);
+  const wallpaperMask = useLiveQuery(() => getSetting<number>('wallpaperMask', 0.08), [], 0.08);
+
+  const isMiku = theme === 'miku';
+  // Miku 主题下若未设置壁纸，默认使用精选 4K 星空壁纸
+  const activeWallpaper = isMiku
+    ? (wallpaperSetting || '/themes/miku/miku-starry-4k.jpg')
+    : wallpaperSetting;
+
+  useEffect(() => {
+    if (isMiku) {
+      document.documentElement.setAttribute('data-theme', 'miku');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+
+    if (activeWallpaper) {
+      document.documentElement.classList.add('has-wallpaper');
+    } else {
+      document.documentElement.classList.remove('has-wallpaper');
+    }
+  }, [isMiku, activeWallpaper]);
 
   return (
-    <div
-      className="min-h-full bg-zinc-50 md:flex"
-      style={
-        wallpaper
-          ? {
-              backgroundImage: `url(${wallpaper})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundAttachment: 'fixed',
-            }
-          : undefined
-      }
-    >
-      <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-zinc-200 bg-white px-3 py-5 md:flex">
-        <div className="mb-6 flex items-center gap-2 px-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-sm font-bold text-white">
-            错
-          </div>
-          <div>
-            <div className="text-sm font-semibold leading-tight text-zinc-900">错题簿</div>
-            <div className="text-[11px] text-zinc-400">考研 · 间隔复习</div>
+    <div className="min-h-full bg-zinc-50 md:flex relative">
+      {/* 4K 壁纸层与遮罩 */}
+      {activeWallpaper && (
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+          <div
+            className="absolute inset-0 bg-cover bg-center transition-all duration-300"
+            style={{
+              backgroundImage: `url(${activeWallpaper})`,
+              filter: wallpaperBlur > 0 ? `blur(${wallpaperBlur}px)` : undefined,
+              transform: wallpaperBlur > 0 ? 'scale(1.04)' : undefined,
+            }}
+          />
+          {wallpaperMask > 0 && (
+            <div
+              className="absolute inset-0 bg-black transition-opacity duration-300"
+              style={{ opacity: wallpaperMask }}
+            />
+          )}
+        </div>
+      )}
+
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-zinc-200 bg-white px-3 py-5 md:flex relative z-10 transition-colors">
+        <div className="mb-6 flex items-center gap-2.5 px-2">
+          {isMiku ? (
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl miku-neon-badge text-xs font-black text-white tracking-tight shadow-sm shrink-0">
+              01
+            </div>
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-sm font-bold text-white shrink-0">
+              错
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold leading-tight text-zinc-900 truncate">
+                {isMiku ? '初音未来 · 错题簿' : '错题簿'}
+              </span>
+              {isMiku && (
+                <span className="rounded-full bg-pink-100 px-1.5 py-0.2 text-[9px] font-black text-[#ff5e97] ring-1 ring-[#ff5e97]/30 shrink-0">
+                  39
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-zinc-400 truncate">
+              {isMiku ? 'Hatsune Miku 考研伴学' : '考研 · 间隔复习'}
+            </div>
           </div>
         </div>
         <nav className="flex flex-col gap-1">
@@ -171,8 +219,10 @@ function Shell() {
                 cn(
                   'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-orange-50 text-orange-600'
-                    : 'text-zinc-600 hover:bg-zinc-100'
+                    ? isMiku
+                      ? 'bg-teal-50 text-teal-600 font-semibold shadow-xs'
+                      : 'bg-orange-50 text-orange-600'
+                    : 'text-zinc-600 hover:bg-zinc-100/70'
                 )
               }
             >
@@ -182,20 +232,30 @@ function Shell() {
           ))}
         </nav>
         <div className="mt-auto px-3 text-[11px] leading-relaxed text-zinc-400">
-          数据保存在本机浏览器
-          <br />
-          记得定期导出备份
+          {isMiku ? (
+            <>
+              <span className="text-teal-600/90 font-medium">🎵 与 Miku 一起备战</span>
+              <br />
+              数据保存在本机浏览器
+            </>
+          ) : (
+            <>
+              数据保存在本机浏览器
+              <br />
+              记得定期导出备份
+            </>
+          )}
         </div>
       </aside>
 
-      <main className="min-h-screen w-full pb-20 md:pb-0">
+      <main className="min-h-screen w-full pb-20 md:pb-0 relative z-10">
         <div className={cn('mx-auto w-full', isImmersive ? '' : 'max-w-3xl px-4 py-4 md:px-8 md:py-8')}>
           <Outlet />
         </div>
       </main>
 
       {!isImmersive && (
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 backdrop-blur safe-bottom md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 backdrop-blur safe-bottom md:hidden transition-colors">
           <div
             className="mx-auto grid max-w-md"
             style={{ gridTemplateColumns: `repeat(${NAV.length}, minmax(0, 1fr))` }}
@@ -208,7 +268,7 @@ function Shell() {
                 className={({ isActive }) =>
                   cn(
                     'flex flex-col items-center gap-0.5 py-2 text-[11px]',
-                    isActive ? 'text-orange-600' : 'text-zinc-500'
+                    isActive ? (isMiku ? 'text-teal-600 font-semibold' : 'text-orange-600') : 'text-zinc-500'
                   )
                 }
               >

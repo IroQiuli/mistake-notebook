@@ -7,6 +7,77 @@
     "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
+/* =========================================================
+   初音未来 (01 MIKU) 专属主题定义
+   - 官方核心蓝绿: #39C5BB (39=Miku)
+   - 经典发带/耳机粉: #FF5E97
+   - 电光青: #00F5D4
+   - 柔和浅葱底: #EAFAF8
+   ========================================================= */
+[data-theme="miku"] {
+  --color-brand: #39c5bb;
+  --color-brand-soft: #eafaf8;
+  --color-miku-pink: #ff5e97;
+  --color-miku-teal: #39c5bb;
+
+  /* 重映射 Tailwind orange-* 梯队至初音未来官方蓝绿色系 */
+  --color-orange-50: #f0fdfa;
+  --color-orange-100: #ccfbf1;
+  --color-orange-200: #99f6e4;
+  --color-orange-300: #5eead4;
+  --color-orange-400: #2dd4bf;
+  --color-orange-500: #39c5bb;
+  --color-orange-600: #29a89f;
+  --color-orange-700: #1d827a;
+  --color-orange-800: #15655f;
+  --color-orange-900: #10514d;
+  --color-orange-950: #082d2b;
+}
+
+/* 4K 壁纸沉浸模式下的适中磨砂毛玻璃效果（确保文字与公式高对比度） */
+[data-theme="miku"].has-wallpaper {
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(57, 197, 187, 0.22);
+}
+
+[data-theme="miku"].has-wallpaper aside {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right-color: rgba(57, 197, 187, 0.2) !important;
+}
+
+[data-theme="miku"].has-wallpaper nav.fixed {
+  background-color: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top-color: rgba(57, 197, 187, 0.2) !important;
+}
+
+[data-theme="miku"].has-wallpaper main .bg-white {
+  background-color: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-color: rgba(57, 197, 187, 0.2);
+  box-shadow: 0 4px 20px -2px rgba(57, 197, 187, 0.08);
+}
+
+[data-theme="miku"].has-wallpaper main .bg-zinc-50 {
+  background-color: rgba(240, 253, 250, 0.65);
+}
+
+/* 初音未来专属微标发光动画与装饰 */
+.miku-neon-badge {
+  background: linear-gradient(135deg, #39c5bb 0%, #20b2aa 100%);
+  box-shadow: 0 0 12px rgba(57, 197, 187, 0.45);
+}
+
+.miku-tag-accent {
+  background-color: rgba(255, 94, 151, 0.12);
+  color: #ff5e97;
+  border-color: rgba(255, 94, 151, 0.3);
+}
+
 html,
 body,
 #root {
