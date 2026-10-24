@@ -113,4 +113,25 @@ describe('buildQueue', () => {
     expect(queue[0].overdueDays).toBe(1);
     expect(queue.slice(1).map((x) => x.problem.id)).toEqual(['today1', 'today2']);
   });
+
+  it('昨日已经做完复习的题目绝不顺延且不标记为逾期', () => {
+    const ps = [
+      problem({ id: 'today1', subjectId: 's1' }),
+      problem({ id: 'yesterday_finished', subjectId: 's2' }),
+    ];
+    const cs = [
+      card('today1', T0),
+      // 昨天已经做完的题目（lastReview 在昨天，且 >= card.due）
+      {
+        ...card('yesterday_finished', T0 - DAY, 2),
+        reps: 1,
+        lastReview: T0 - DAY + 2 * 3600 * 1000,
+      },
+    ];
+    const queue = buildQueue(ps, cs, { now: T0 });
+    const item = queue.find((x) => x.problem.id === 'yesterday_finished');
+    if (item) {
+      expect(item.overdueDays).toBe(0);
+    }
+  });
 });

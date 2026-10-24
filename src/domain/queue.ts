@@ -1,5 +1,5 @@
 import type { Card, Problem, ReviewLog } from './types';
-import { dayDiff, dayKey, learningDayEnd } from './time';
+import { dayDiff, dayKey, learningDayEnd, learningDayStart } from './time';
 import { weightOf } from './weight';
 
 export interface QueueOptions {
@@ -35,6 +35,20 @@ export interface QueueItem {
   auto?: boolean;
 }
 
+/**
+ * 判断一张卡片是否属于「昨日或以往没写完顺延到今天」的错题：
+ * 1. 到期日早于今天 (diff < 0)；
+ * 2. 且在到期日当天及之后未作答过（若上次作答时间 >= 到期日所在学习日开始时间，说明该题当时已经做完，绝非没写完顺延）。
+ */
+export function isOverdueUnfinished(c: Card, now: number): boolean {
+  const diff = dayDiff(c.due, now);
+  if (diff >= 0) return false;
+  // 新卡片（从未复习过），到期日早于今天，属于没做完顺延
+  if (!c.lastReview || c.reps === 0) return true;
+  // 复习过的卡片，只有上次复习时间早于该到期日开始时间，才算到期后一直没写
+  return c.lastReview < learningDayStart(c.due);
+}
+
 export function buildQueue(problems: Problem[], cards: Card[], opts: QueueOptions): QueueItem[] {
   const {
     now,
@@ -61,7 +75,7 @@ export function buildQueue(problems: Problem[], cards: Card[], opts: QueueOption
     const c = cardMap.get(p.id);
     if (!c) continue;
     const diff = dayDiff(c.due, now);
-    const overdueDays = diff < 0 ? -diff : 0;
+    const overdueDays = isOverdueUnfinished(c, now) ? -diff : 0;
     const item: QueueItem = { problem: p, card: c, overdueDays };
     if (c.due > end) {
       later.push(item);

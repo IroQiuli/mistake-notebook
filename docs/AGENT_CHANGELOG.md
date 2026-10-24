@@ -334,3 +334,36 @@
 - **静态类型检查**：执行 `npx tsc --noEmit` 零类型警告与错误。
 - **生产打包**：`vite build` 成功完成打包，生成 23 项 precache 离线资源。
 - **本地服务**：Vite 开发服务器运行正常。
+
+---
+
+## 变更批次八：顺延逻辑精准界定（已写题目杜绝顺延）、数据自愈与 PWA 强制刷新升级
+- **时间**：2026-10-25
+- **Git 分支**：`main`（推送到 GitHub 远程仓库）
+- **核心诉求**：
+  1. 用户反馈：“为什么我在平板上刷新后还是没有最新版的改动” —— 移动端/iPadOS PWA Service Worker 强缓存导致即便刷新仍加载旧版本代码。
+  2. 用户反馈：“我要昨日顺延的是没写的题，写完的题你顺延干嘛？” —— 彻底界定顺延范围，只有真正未做完的题目才顺延，已做完的题目绝不能标记为“昨日顺延”，同时自愈修复历史数据。
+- **具体实现**：
+  1. **顺延边界严格界定 (`src/domain/queue.ts` & `src/domain/queue.test.ts`)**：
+     - 新增并导出 `isOverdueUnfinished(c: Card, now: number): boolean` 判定函数；
+     - 只有当 `c.due` 早于今天，**并且**在到期日当天及之后从未复习过（`!c.lastReview || c.lastReview < learningDayStart(c.due)`）时，才作为真正的“昨日/以往未做完顺延”；
+     - 凡是在到期日当天或之后已经作答完毕的题目（`c.lastReview >= learningDayStart(c.due)`），`overdueDays` 强制归零，绝不标记为“昨日顺延”，不强行置顶；
+     - 补充单测 `昨日已经做完复习的题目绝不顺延且不标记为逾期`，验证通过。
+  2. **历史停滞数据自动治愈 (`src/domain/heal.ts`)**：
+     - 编写自愈修复模块 `healCards()`，在应用启动及手动刷新时自动静默执行；
+     - 扫描卡片表中因早期短步长 bug 导致 `due <= lastReview` 停滞在过去的卡片，根据其最后一次 reviewLog 的评分（1/2/3/4）重新推进到对应的未来学习日早晨（09:00），消除平板历史脏数据。
+  3. **PWA 极速激活与自动更新 (`vite.config.ts` & `src/main.tsx` & `tsconfig.json`)**：
+     - 在 `vite.config.ts` 中配置 Workbox：
+       - `skipWaiting: true`：新 Service Worker 安装后立即跳过等待接管控制权；
+       - `clientsClaim: true`：立即控制所有打开的页面；
+       - `cleanupOutdatedCaches: true`：自动清除旧版本缓存文件；
+     - 在 `src/main.tsx` 中集成 `registerSW({ immediate: true, onNeedRefresh })`，当检测到 GitHub Pages 发布新版本时自动触发热更新。
+  4. **设置页提供一键强制脱壳刷新 (`src/lib/version.ts` & `src/features/settings/SettingsPage.tsx`)**：
+     - 新增 [src/lib/version.ts](file:///d:/浏览器下载用/学习/cuotiben/src/lib/version.ts)，提供 `forceReloadAndClearCache()` 函数；
+     - 在设置页新增「版本与系统更新」专区，展示当前版本 `v0.8.2 · 初音未来版`，并提供「强制刷新升级」按钮；
+     - 点击后一键注销当前全部 Service Worker、清除 CacheStorage 离线包、执行卡片排期自愈并附加随机时间戳强制重新拉取最新版本。
+
+### 验证结论（批次八）
+- **单测套件**：执行 `npm test`，全部 22 个测试套件、134 项单元测试 100% 绿色通过。
+- **静态类型检查**：执行 `npx tsc --noEmit` 0 警告、0 错误。
+- **生产打包**：`vite build` 成功完成打包，包含 workbox-window 与最新版本资源。

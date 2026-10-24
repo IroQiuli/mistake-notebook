@@ -9,6 +9,7 @@ import {
   Lock,
   Palette,
   Plus,
+  RefreshCw,
   ShieldCheck,
   Sliders,
   Sparkles,
@@ -29,6 +30,7 @@ import { createChapter } from '../../storage/problems';
 import { canvasToBlob, prepareImage } from '../capture/pipeline';
 import { formatDateTime } from '../../domain/time';
 import { resolveThemeUrl } from '../../lib/themeUrl';
+import { APP_VERSION, APP_BUILD_TIME, forceReloadAndClearCache } from '../../lib/version';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import { useToast } from '../../ui/Toast';
@@ -782,13 +784,34 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="关于">
-        <div className="space-y-1.5 text-xs leading-relaxed text-zinc-500">
-          <p>错题簿 v0.8.0 · 本地优先的考研错题复习工具</p>
-          <p>排期算法：FSRS-5，目标保留率 90%</p>
-          <p>学习日边界：每天 04:00（凌晨复习算前一天）</p>
-          <p>备份加密：PBKDF2-SHA256（60 万次迭代）+ AES-256-GCM</p>
-          <p>当前版本：录入（拍照/相册/PDF）、手写批注、FSRS 复习、按科题量、套卷、统计与加密备份。</p>
+      <Section title="版本与系统更新">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-zinc-800">{APP_VERSION}</div>
+              <div className="text-[11px] text-zinc-400">构建时间 {APP_BUILD_TIME}</div>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                toast.show('正在强制清除缓存并拉取最新版本…', 'info');
+                await forceReloadAndClearCache();
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <RefreshCw size={13} />
+              强制刷新升级
+            </Button>
+          </div>
+          <p className="text-[11px] leading-relaxed text-zinc-500">
+            当在平板端、手机端刷新后仍显示旧版本或壁纸未生效时，点击上方按钮可一键清理 PWA 离线缓存、自动修复异常排期并立即载入最新版。
+          </p>
+          <div className="border-t border-zinc-100 pt-2.5 space-y-1 text-xs text-zinc-400">
+            <p>排期算法：FSRS-5 长程间隔复习，目标保留率 90%</p>
+            <p>学习日边界：每天 04:00（凌晨复习算前一天）</p>
+            <p>备份加密：PBKDF2-SHA256（60 万次迭代）+ AES-256-GCM</p>
+          </div>
         </div>
       </Section>
 
