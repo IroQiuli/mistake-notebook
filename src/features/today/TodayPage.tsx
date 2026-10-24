@@ -11,6 +11,12 @@ import { Dialog } from '../../ui/Dialog';
 import { EmptyState } from '../../ui/EmptyState';
 import { cn } from '../../ui/cn';
 import { DetailDialog, type DetailMode } from './DetailDialog';
+import {
+  MikuChibiCheer,
+  MikuChibiSprint,
+  MikuChibiLeek,
+  MikuChibiCelebrate,
+} from '../../ui/MikuChibi';
 
 function ProgressRing({
   done,
@@ -215,13 +221,17 @@ export default function TodayPage() {
         {streak > 0 && (
           <div
             className={cn(
-              'mb-1 flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium',
+              'mb-1 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
               isMiku
-                ? 'bg-teal-50 text-teal-600 ring-1 ring-teal-200/50'
+                ? 'bg-teal-50 text-teal-700 ring-1 ring-teal-200/60 shadow-xs'
                 : 'bg-orange-50 text-orange-600'
             )}
           >
-            <Flame size={13} className={isMiku ? 'text-teal-500' : 'text-orange-500'} />
+            {isMiku ? (
+              <MikuChibiCheer size={18} className="-my-1" />
+            ) : (
+              <Flame size={13} className="text-orange-500" />
+            )}
             连续 {streak} 天
           </div>
         )}
@@ -236,16 +246,20 @@ export default function TodayPage() {
             : 'bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/40 border-orange-200/80'
         )}
       >
-        <div className="flex items-center gap-1.5 font-medium text-zinc-800">
-          <span
-            className={cn(
-              'flex h-2 w-2 rounded-full animate-pulse',
-              isMiku ? 'bg-teal-500' : 'bg-orange-500'
-            )}
-          />
+        <div className="flex items-center gap-2 font-medium text-zinc-800">
+          {isMiku ? (
+            <MikuChibiSprint size={22} className="-my-1" />
+          ) : (
+            <span
+              className={cn(
+                'flex h-2 w-2 rounded-full animate-pulse',
+                isMiku ? 'bg-teal-500' : 'bg-orange-500'
+              )}
+            />
+          )}
           {isMiku && (
             <span className="rounded bg-teal-500/10 px-1 py-0.2 text-[9px] font-black text-teal-600 ring-1 ring-teal-500/20">
-              MIKU
+              MIKU 冲刺
             </span>
           )}
           <span>目标 {examCountdown.year} 考研初试</span>
@@ -310,13 +324,13 @@ export default function TodayPage() {
               {queue.length > 0 && (
                 <span
                   className={cn(
-                    'ml-1.5 inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors',
+                    'ml-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors',
                     isMiku
                       ? 'bg-teal-50 text-teal-600 group-hover:bg-teal-100 ring-1 ring-teal-200/50'
                       : 'bg-orange-50 text-orange-600 group-hover:bg-orange-100'
                   )}
                 >
-                  <ListOrdered size={12} />
+                  {isMiku ? <MikuChibiLeek size={16} className="-my-0.5" /> : <ListOrdered size={12} />}
                   待写清单
                 </span>
               )}
@@ -347,11 +361,16 @@ export default function TodayPage() {
         </div>
 
         {queue.length === 0 && todayReviewed > 0 && (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-center">
-            <div className="text-sm font-semibold text-emerald-800">
-              {isMiku ? '🎉 39！今日错题已全部清空！' : '🎉 今日错题已全部清空！'}
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5 text-center shadow-xs">
+            {isMiku && (
+              <div className="mb-2 flex justify-center">
+                <MikuChibiCelebrate size={56} className="drop-shadow-xs animate-pulse" />
+              </div>
+            )}
+            <div className="text-sm font-bold text-emerald-800">
+              {isMiku ? '39！今日错题已全部清空！' : '🎉 今日错题已全部清空！'}
             </div>
-            <p className="mt-0.5 text-xs text-emerald-600">
+            <p className="mt-1 text-xs text-emerald-600">
               {isMiku
                 ? `今日已复习 ${todayReviewed} 道题，保持稳健节奏，Miku 陪你稳步上岸！`
                 : `今日已复习 ${todayReviewed} 道题，保持稳健节奏，稳步上岸！`}

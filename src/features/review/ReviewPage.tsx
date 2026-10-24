@@ -13,7 +13,7 @@ import {
   Timer,
   Trash2,
 } from 'lucide-react';
-import { db } from '../../storage/db';
+import { db, getSetting } from '../../storage/db';
 import { clearActivePaper, loadActivePaper, type ActivePaper } from '../../storage/paper';
 import { getUrl, putAsset } from '../../storage/assets';
 import { previewIntervals } from '../../domain/scheduler';
@@ -32,12 +32,26 @@ import { useToast } from '../../ui/Toast';
 import { useSession } from './useSession';
 import { canvasToBlob, prepareImage } from '../capture/pipeline';
 import { updateProblem } from '../../storage/problems';
+import {
+  MikuChibiDizzy,
+  MikuChibiThinking,
+  MikuChibiThumbsUp,
+  MikuChibiSparkle,
+  MikuChibiCelebrate,
+} from '../../ui/MikuChibi';
 
 const RATING_STYLE: Record<Rating, string> = {
   1: 'border-red-200 bg-red-50 text-red-600',
   2: 'border-amber-200 bg-amber-50 text-amber-700',
   3: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   4: 'border-sky-200 bg-sky-50 text-sky-700',
+};
+
+const CHIBI_RATING_ICONS: Record<Rating, React.ReactNode> = {
+  1: <MikuChibiDizzy size={26} className="mb-0.5" />,
+  2: <MikuChibiThinking size={26} className="mb-0.5" />,
+  3: <MikuChibiThumbsUp size={26} className="mb-0.5" />,
+  4: <MikuChibiSparkle size={26} className="mb-0.5" />,
 };
 
 function ReviewBody({
@@ -74,6 +88,8 @@ function ReviewBody({
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(true);
   const answerInputRef = useRef<HTMLInputElement>(null);
+  const theme = useLiveQuery(() => getSetting<string>('theme', 'miku'), [], 'miku');
+  const isMiku = theme === 'miku';
 
   const problemId = current?.problem.id;
 
@@ -198,16 +214,28 @@ function ReviewBody({
     return (
       <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center px-6">
         <div className="text-center">
-          <div className="text-4xl">🎉</div>
-          <h1 className="mt-3 text-xl font-semibold text-zinc-900">
-            {paper ? '这套卷做完了' : '这一轮复习完了'}
+          {isMiku ? (
+            <div className="relative mx-auto mb-3 flex justify-center">
+              <div className="absolute inset-0 -m-4 rounded-full bg-teal-400/20 blur-xl pointer-events-none" />
+              <MikuChibiCelebrate size={88} className="relative drop-shadow-md animate-bounce" />
+            </div>
+          ) : (
+            <div className="text-4xl">🎉</div>
+          )}
+          <h1 className="mt-2 text-xl font-bold text-zinc-900">
+            {paper ? '这套卷做完了' : (isMiku ? '今日错题复习圆满完成！' : '这一轮复习完了')}
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
             {paper ? `${paper.title} · ` : ''}共 {summary.total} 题 · 用时{' '}
             {formatDuration(summary.durationMs)}
           </p>
+          {isMiku && (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700 ring-1 ring-teal-200">
+              <span>39！初音未来为你点赞，考研必胜！</span>
+            </div>
+          )}
         </div>
-        <div className="mt-6 space-y-2 rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="mt-6 space-y-2 rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs">
           {([1, 2, 3, 4] as Rating[]).map((r) => (
             <div key={r} className="flex items-center justify-between text-sm">
               <span className="text-zinc-600">{RATING_LABEL[r]}</span>
@@ -497,12 +525,14 @@ function ReviewBody({
                 type="button"
                 onClick={() => void rate(r)}
                 className={cn(
-                  'flex flex-col items-center gap-0.5 rounded-xl border py-2.5 active:opacity-80',
+                  'flex flex-col items-center justify-center gap-0.5 rounded-xl border py-2 active:opacity-80 transition-all active:scale-95',
+                  isMiku && 'shadow-xs hover:border-teal-400',
                   RATING_STYLE[r]
                 )}
               >
-                <span className="text-sm font-medium">{RATING_LABEL[r]}</span>
-                <span className="text-[10px] opacity-70">
+                {isMiku && CHIBI_RATING_ICONS[r]}
+                <span className="text-sm font-semibold">{RATING_LABEL[r]}</span>
+                <span className="text-[10px] opacity-75">
                   {preview ? formatDue(preview[r], Date.now()) : ''}
                 </span>
               </button>

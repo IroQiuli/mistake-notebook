@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- 渐变背景：深邃的初音葱青至墨绿夜空 -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a4d49" />
+      <stop offset="40%" stop-color="#123532" />
+      <stop offset="100%" stop-color="#091b1a" />
+    </linearGradient>
+
+    <!-- 初音葱青主题渐变 -->
+    <linearGradient id="mikuGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4eebd9" />
+      <stop offset="100%" stop-color="#39c5bb" />
+    </linearGradient>
+
+    <!-- 双马尾流线渐变 -->
+    <linearGradient id="hairGradLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#39c5bb" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#196a64" stop-opacity="0.2" />
+    </linearGradient>
+    <linearGradient id="hairGradRight" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#39c5bb" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#196a64" stop-opacity="0.2" />
+    </linearGradient>
+
+    <!-- 柔光发光滤镜 -->
+    <filter id="mikuGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="14" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <filter id="subtleGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- 圆角背景 (Squircle) -->
+  <rect width="512" height="512" rx="116" fill="url(#bgGrad)" />
+
+  <!-- 外围赛博微光刻度环 -->
+  <circle cx="256" cy="256" r="226" fill="none" stroke="#39c5bb" stroke-opacity="0.18" stroke-width="3" stroke-dasharray="12 10" />
+  <circle cx="256" cy="256" r="214" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.5" />
+
+  <!-- 左双马尾飘逸流线 -->
+  <path d="M 125 150 C 70 210, 48 300, 72 390 C 82 430, 108 450, 120 440 C 132 430, 115 380, 112 340 C 108 280, 130 220, 155 175 Z" fill="url(#hairGradLeft)" />
+
+  <!-- 右双马尾飘逸流线 -->
+  <path d="M 387 150 C 442 210, 464 300, 440 390 C 430 430, 404 450, 392 440 C 380 430, 397 380, 400 340 C 404 280, 382 220, 357 175 Z" fill="url(#hairGradRight)" />
+
+  <!-- 初音未来标志性头戴耳机发箍 -->
+  <path d="M 170 162 C 170 105, 342 105, 342 162" fill="none" stroke="#252b2f" stroke-width="14" stroke-linecap="round" />
+  <path d="M 185 158 C 185 118, 327 118, 327 158" fill="none" stroke="#39c5bb" stroke-width="3" stroke-opacity="0.8" />
+
+  <!-- 左发饰（初音经典黑底粉红边框发带方块） -->
+  <g transform="translate(142, 135) rotate(-16)">
+    <rect x="-20" y="-20" width="40" height="40" rx="9" fill="#141c1f" stroke="#ff5e97" stroke-width="4.5" />
+    <rect x="-11" y="-11" width="22" height="22" rx="4" fill="#ff5e97" opacity="0.85" />
+    <circle cx="0" cy="0" r="3" fill="#ffffff" />
+  </g>
+
+  <!-- 右发饰（初音经典黑底粉红边框发带方块） -->
+  <g transform="translate(370, 135) rotate(16)">
+    <rect x="-20" y="-20" width="40" height="40" rx="9" fill="#141c1f" stroke="#ff5e97" stroke-width="4.5" />
+    <rect x="-11" y="-11" width="22" height="22" rx="4" fill="#ff5e97" opacity="0.85" />
+    <circle cx="0" cy="0" r="3" fill="#ffffff" />
+  </g>
+
+  <!-- 耳机发声单元（左右） -->
+  <rect x="156" y="152" width="16" height="32" rx="6" fill="#192226" stroke="#39c5bb" stroke-width="2.5" />
+  <rect x="340" y="152" width="16" height="32" rx="6" fill="#192226" stroke="#39c5bb" stroke-width="2.5" />
+  <line x1="164" y1="160" x2="164" y2="176" stroke="#ff5e97" stroke-width="3" stroke-linecap="round" />
+  <line x1="348" y1="160" x2="348" y2="176" stroke="#ff5e97" stroke-width="3" stroke-linecap="round" />
+
+  <!-- 标志性 01 经典图腾 -->
+  <text x="256" y="322" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Impact, Arial Black, sans-serif" font-weight="900" font-size="185" fill="#ffffff" letter-spacing="-6" filter="url(#mikuGlow)">01</text>
+
+  <!-- 考研错题本专属·音乐波形进度指示 -->
+  <g transform="translate(186, 348)">
+    <rect x="0" y="8" width="6" height="16" rx="3" fill="#39c5bb" opacity="0.75" />
+    <rect x="12" y="3" width="6" height="26" rx="3" fill="#39c5bb" opacity="0.9" />
+    <rect x="24" y="0" width="6" height="32" rx="3" fill="#ff5e97" />
+    <rect x="36" y="5" width="6" height="22" rx="3" fill="#39c5bb" opacity="0.85" />
+    <rect x="48" y="10" width="6" height="12" rx="3" fill="#39c5bb" opacity="0.6" />
+    <rect x="60" y="2" width="6" height="28" rx="3" fill="#39c5bb" />
+    <rect x="72" y="7" width="6" height="18" rx="3" fill="#39c5bb" opacity="0.7" />
+    <rect x="84" y="0" width="6" height="32" rx="3" fill="#4eebd9" />
+    <rect x="96" y="6" width="6" height="20" rx="3" fill="#39c5bb" opacity="0.8" />
+    <rect x="108" y="11" width="6" height="10" rx="3" fill="#39c5bb" opacity="0.5" />
+    <rect x="120" y="4" width="6" height="24" rx="3" fill="#ff5e97" opacity="0.9" />
+    <rect x="132" y="8" width="6" height="16" rx="3" fill="#39c5bb" opacity="0.75" />
+  </g>
+
+  <!-- 初音未来·错题本底座胶囊铭牌 -->
+  <g transform="translate(136, 404)">
+    <rect width="240" height="42" rx="21" fill="#0b2422" stroke="#39c5bb" stroke-width="2" stroke-opacity="0.8" />
+    <text x="120" y="26" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', monospace, sans-serif" font-weight="800" font-size="16" fill="#39c5bb" letter-spacing="3.5">HATSUNE MIKU</text>
+  </g>
+
+  <!-- 左上角迷你音符装饰 -->
+  <path d="M 98 108 C 98 100, 110 94, 118 92 L 118 116 C 114 114, 108 115, 104 118 C 98 122, 98 128, 104 130 C 110 132, 118 128, 118 120 L 118 100" fill="none" stroke="#39c5bb" stroke-width="3" stroke-linecap="round" opacity="0.7" />
+
+  <!-- 39 (Miku) 小萌点 -->
+  <circle cx="414" cy="94" r="19" fill="#ff5e97" filter="url(#subtleGlow)" />
+  <text x="414" y="101" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-weight="900" font-size="17" fill="#ffffff">39</text>
+</svg>
