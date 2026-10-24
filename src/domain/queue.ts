@@ -1,5 +1,5 @@
 import type { Card, Problem, ReviewLog } from './types';
-import { dayKey, learningDayEnd } from './time';
+import { dayDiff, dayKey, learningDayEnd } from './time';
 import { weightOf } from './weight';
 
 export interface QueueOptions {
@@ -60,10 +60,14 @@ export function buildQueue(problems: Problem[], cards: Card[], opts: QueueOption
     if (reviewedTodayIds && reviewedTodayIds.has(p.id)) continue;
     const c = cardMap.get(p.id);
     if (!c) continue;
-    const overdueDays = Math.max(0, Math.floor((end - c.due) / 86400000));
+    const diff = dayDiff(c.due, now);
+    const overdueDays = diff < 0 ? -diff : 0;
     const item: QueueItem = { problem: p, card: c, overdueDays };
     if (c.due > end) {
       later.push(item);
+    } else if (overdueDays > 0) {
+      // 逾期错题（昨日或更早未做完）：顺延到今天优先处理，不作为普通新题排后
+      due.push(item);
     } else if (c.state === 0) {
       fresh.push(item);
     } else {
@@ -171,6 +175,14 @@ function applyQuotas(
 }
 
 function interleaveBySubject(items: QueueItem[]): QueueItem[] {
+  // 逾期错题（昨天及更早顺延下来的）集中排在最前列优先处理
+  const overdueItems = items.filter((it) => it.overdueDays > 0);
+  const normalItems = items.filter((it) => it.overdueDays === 0);
+
+  return [...roundRobinBySubject(overdueItems), ...roundRobinBySubject(normalItems)];
+}
+
+function roundRobinBySubject(items: QueueItem[]): QueueItem[] {
   const buckets = new Map<string, QueueItem[]>();
   for (const it of items) {
     const arr = buckets.get(it.problem.subjectId) ?? [];

@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from './db';
 import {
   createProblem,
+  createTopic,
+  updateTopic,
+  deleteTopic,
   deleteProblem,
   markArchived,
   setWeight,
@@ -89,5 +92,39 @@ describe('createProblem', () => {
     const p = await db.problems.get(id);
     expect(p!.archivedAt).toBeGreaterThan(0);
     expect(await db.cards.get(id)).toBeTruthy();
+  });
+
+  it('录题支持携带答案资产 answerAssetIds', async () => {
+    const id = await createProblem(
+      { ...input(), answerAssetIds: ['ans_1', 'ans_2'] },
+      Date.now()
+    );
+    const p = await db.problems.get(id);
+    expect(p?.answerAssetIds).toEqual(['ans_1', 'ans_2']);
+  });
+
+  it('知识点标签支持修改名称及级联删除', async () => {
+    const topic = await createTopic('s1', '线性相关性');
+    expect(topic.name).toBe('线性相关性');
+
+    // 修改知识点标签
+    await updateTopic(topic.id, '线性相关与线性无关');
+    const updated = await db.topics.get(topic.id);
+    expect(updated?.name).toBe('线性相关与线性无关');
+
+    // 关联题目并删除标签
+    const probId = await createProblem(
+      { ...input(), topicIds: [topic.id] },
+      Date.now()
+    );
+    let p = await db.problems.get(probId);
+    expect(p?.topicIds).toContain(topic.id);
+
+    await deleteTopic(topic.id);
+    expect(await db.topics.get(topic.id)).toBeUndefined();
+
+    // 题目的 topicIds 中的引用被自动清理
+    p = await db.problems.get(probId);
+    expect(p?.topicIds).not.toContain(topic.id);
   });
 });

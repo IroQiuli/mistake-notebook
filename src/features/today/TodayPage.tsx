@@ -477,6 +477,11 @@ export default function TodayPage() {
                     <span className="truncate text-sm font-medium text-zinc-800">
                       {chapter?.name ?? '未分类'}
                     </span>
+                    {item.overdueDays > 0 && (
+                      <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600">
+                        {item.overdueDays === 1 ? '昨日顺延' : `逾期${item.overdueDays}天`}
+                      </span>
+                    )}
                     {item.auto && (
                       <span className="rounded bg-sky-50 px-1 text-[10px] text-sky-600">配额补齐</span>
                     )}

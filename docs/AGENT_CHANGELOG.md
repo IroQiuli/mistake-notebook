@@ -133,3 +133,55 @@
 - **单测套件**：执行 `npm test`，全部 22 个测试文件、129 个单元测试全部 100% 通过（新增 5 项单测覆盖排期阶梯、草稿存储与题号自增）。
 - **静态类型检查**：执行 `npx tsc --noEmit` 零报错、类型完全安全。
 - **PWA 构建**：执行 `npx vite build` 打包成功，产物正常生成。
+
+---
+
+## 变更批次三：逾期排期顺延靠前、录题同步添加答案、年份快捷选择与知识点标签编辑
+- **时间**：2026-10-24
+- **Git 备份分支**：`backup-before-overdue-and-capture-answer-opt`
+- **核心诉求**：
+  1. **逾期错题顺延与排期靠前**：昨天或以往没做完的逾期题目自动顺延到今天，且在今天复习清单中排在最前；同时在各科目轮转交替时，优先轮转所有逾期题，再轮转今天到期题目。
+  2. **录题流程支持同步添加答案**：录入错题时即可直接添加答案与解析图片（支持拍照、相册多选、剪贴板粘贴），保存时一并入库。
+  3. **年份快捷选择**：录题时年份无需调起软键盘手输，提供 2020~2026 常用年份快捷 Chips 与 2000~2027 下拉选择器。
+  4. **知识点标签管理与修改**：支持对已有知识点标签进行重命名和删除（删除时自动级联清理题目关联）。
+
+### 改动详细记录
+
+#### 1. 逾期排期顺延与优先级置顶 (`src/domain/queue.ts` & `src/features/today/` & `src/features/review/`)
+- **排期算法核心**：
+  - 在 `src/domain/queue.ts` 中使用 `dayDiff(c.due, now)` 计算 `overdueDays = diff < 0 ? -diff : 0`，准确消除因零点/学习日 4:00 边界引起的非预期误差。
+  - 所有到期日早于今天的逾期题目（`overdueDays > 0`，无论处于 `state: 0` 还是 `state: 2`）统一标记并在优先级评分中大幅加分（基础分 1000 + 每天额外 100 分），确保稳居顶层。
+  - 改造跨科目轮转调度算法 `interleaveBySubject` 为两段式轮转机制：
+    1. 第一阶段：对所有包含逾期题目的科目进行 round-robin 轮转，优先把昨天未做完的题目交替排在最前列；
+    2. 第二阶段：对正常今日到期的题目进行 round-robin 轮转紧随其后。
+  - 在 `src/domain/queue.test.ts` 新增单测，严格验证“昨天未做完的逾期题目顺延到今日且排在最前”。
+- **UI 视觉反馈**：
+  - `src/features/today/TodayPage.tsx`：待写清单弹窗中的逾期题目增加鲜艳的小徽章（`昨日顺延` 或 `逾期N天`），用户一目了然。
+  - `src/features/review/ReviewPage.tsx`：复习界面顶部栏当做逾期题时展示 `昨日顺延 / 逾期N天` 醒目徽章。
+
+#### 2. 录题阶段直接添加答案图 (`src/features/capture/` & `src/storage/problems.ts` & `src/features/problem/`)
+- **表单支持**：
+  - `src/features/capture/ProblemForm.tsx` 增加“答案与解析图片（选填）”折叠卡片，支持拍照、相册多选、以及剪贴板一键粘贴，支持缩略图横向轮播与单张删除。
+  - `onSubmit` 扩展为 `(meta: MetaValue, answerBlobs?: Blob[]) => Promise<void>`。
+- **持久化闭环**：
+  - `src/features/capture/CapturePage.tsx` 中的 `save` 函数接收 `answerBlobs`，通过 `prepareImage(b, 2400)` 压缩并写入 Dexie `assets` 表（类型 `answer`），将生成的 `answerAssetIds` 一并传入 `createProblem`，录题流程一步到位。
+  - `src/features/problem/ProblemPage.tsx` 中的编辑表单弹窗同步适配 `answerBlobs`，编辑时新添的答案图同样自动压缩保存。
+
+#### 3. 年份快捷选择器 (`src/features/capture/MetadataFields.tsx`)
+- 移除了传统的纯数字输入框，改为：
+  - `2020~2026` 常用年份快捷 Chips（一键高亮选中并支持二次点击反选取消）；
+  - 搭配 2000~2027 下拉选择框（`<select>`），彻底告别移动端弹出数字软键盘手输的低效体验。
+
+#### 4. 知识点标签可修改与管理 (`src/storage/problems.ts` & `src/features/capture/MetadataFields.tsx`)
+- **存储层接口**：
+  - 在 `src/storage/problems.ts` 导出 `updateTopic(id, name)`（重命名标签）与 `deleteTopic(id)`（事务内同时清理所有关联题目中的 `topicIds` 引用）。
+- **交互层设计**：
+  - 在分类表单的知识点区域提供“管理标签”切换开关，开启后每个标签展示编辑笔与删除垃圾桶图标；
+  - 点击编辑笔弹出快速重命名弹窗，即时保存生效；
+  - 点击垃圾桶即刻安全删除并清理题目引用；
+  - 在 `src/storage/problems.test.ts` 新增对 `updateTopic` 和 `deleteTopic` 的完整单测验证。
+
+### 验证结论（批次三）
+- **单测套件**：执行 `npm test`，全部 22 个测试文件、132 个单元测试全部 100% 通过（新增 3 项针对逾期顺延置顶、答案图携带与标签修改级联删除的单测）。
+- **静态类型检查**：执行 `npx tsc --noEmit` 零报错，全工程类型安全无隐患。
+- **PWA 构建**：执行 `npx vite build` 成功打包生成生产环境产物（dist 校验通过）。

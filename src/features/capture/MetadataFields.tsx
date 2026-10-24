@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronDown, Minus, Plus } from 'lucide-react';
+import { Check, ChevronDown, Minus, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { Chapter, Mastery, SourceKind, Subject, Topic } from '../../domain/types';
 import { ERROR_TAGS, MASTERY_LEVELS, masteryTextColor } from '../../domain/taxonomy';
-import { createChapter, createTopic } from '../../storage/problems';
+import { createChapter, createTopic, deleteTopic, updateTopic } from '../../storage/problems';
 import {
   calcInitialDue,
   weightFromMastery,
@@ -12,6 +12,7 @@ import {
 import { formatToday } from '../../domain/time';
 import { cn } from '../../ui/cn';
 import { Button } from '../../ui/Button';
+import { Dialog } from '../../ui/Dialog';
 
 export interface MetaValue {
   subjectId: string;
@@ -64,6 +65,9 @@ export function MetadataFields({
   const [newTopic, setNewTopic] = useState('');
   const [advanced, setAdvanced] = useState(defaultAdvanced);
   const [error, setError] = useState('');
+  const [isManagingTopics, setIsManagingTopics] = useState(false);
+  const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
+  const [editTopicName, setEditTopicName] = useState('');
 
   const subjectChapters = useMemo(
     () => chapters.filter((c) => c.subjectId === value.subjectId),
@@ -98,6 +102,23 @@ export function MetadataFields({
     if (!value.topicIds.includes(topic.id)) set({ topicIds: [...value.topicIds, topic.id] });
     setNewTopic('');
     onTaxonomyChange?.();
+  };
+
+  const handleSaveTopicName = async () => {
+    if (!editingTopic || !editTopicName.trim()) return;
+    await updateTopic(editingTopic.id, editTopicName.trim());
+    setEditingTopic(null);
+    onTaxonomyChange?.();
+  };
+
+  const handleDeleteTopic = async (topicId: string, topicName: string) => {
+    if (window.confirm(`确定删除知识点标签「${topicName}」吗？`)) {
+      await deleteTopic(topicId);
+      if (value.topicIds.includes(topicId)) {
+        set({ topicIds: value.topicIds.filter((id) => id !== topicId) });
+      }
+      onTaxonomyChange?.();
+    }
   };
 
   const extraCount =
@@ -202,10 +223,53 @@ export function MetadataFields({
       {advanced && (
         <div className="space-y-4">
           <div>
-            <span className="mb-1.5 block text-xs font-medium text-zinc-500">知识点标签</span>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-500">知识点标签</span>
+              {subjectTopics.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsManagingTopics(!isManagingTopics)}
+                  className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-orange-600 transition-colors"
+                >
+                  <Pencil size={11} />
+                  <span>{isManagingTopics ? '完成管理' : '管理标签'}</span>
+                </button>
+              )}
+            </div>
+
             <div className="flex flex-wrap gap-1.5">
               {subjectTopics.map((t) => {
                 const active = value.topicIds.includes(t.id);
+                if (isManagingTopics) {
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/80 px-2 py-1 text-xs text-amber-950 shadow-xs"
+                    >
+                      <span className="font-medium">{t.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingTopic(t);
+                          setEditTopicName(t.name);
+                        }}
+                        className="rounded p-0.5 text-amber-700 hover:bg-amber-100 hover:text-amber-900"
+                        title="重命名标签"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteTopic(t.id, t.name)}
+                        className="rounded p-0.5 text-amber-700 hover:bg-rose-100 hover:text-rose-600"
+                        title="删除标签"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  );
+                }
+
                 return (
                   <button
                     key={t.id}
@@ -218,10 +282,10 @@ export function MetadataFields({
                       })
                     }
                     className={cn(
-                      'rounded-lg border px-2.5 py-1 text-xs',
+                      'rounded-lg border px-2.5 py-1 text-xs transition-colors',
                       active
-                        ? 'border-orange-300 bg-orange-50 text-orange-600'
-                        : 'border-zinc-200 text-zinc-600'
+                        ? 'border-orange-300 bg-orange-50 font-medium text-orange-600'
+                        : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50'
                     )}
                   >
                     {active && <Check size={11} className="mr-0.5 inline" />}
@@ -357,37 +421,84 @@ export function MetadataFields({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-zinc-500">年份</span>
-              <input
-                inputMode="numeric"
-                value={value.sourceYear ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/\D/g, '').slice(0, 4);
-                  set({ sourceYear: v ? Number(v) : undefined });
-                }}
-                placeholder="2023"
-                className={inputCls}
-              />
-            </label>
-            <label className="col-span-2 block">
-              <span className="mb-1.5 block text-xs font-medium text-zinc-500">卷子 / 讲义</span>
-              <input
-                value={value.sourcePaper ?? ''}
-                onChange={(e) => {
-                  const paper = e.target.value;
-                  // 老用户习惯直接写「2023真题」，这里顺手打上结构化类型
-                  const autoKind: Partial<MetaValue> =
-                    !value.sourceKind && /真题|统考/.test(paper)
-                      ? { sourceKind: '真题' }
-                      : {};
-                  set({ sourcePaper: paper, ...autoKind });
-                }}
-                placeholder="真题 / 李林四套 / 第3章"
-                className={inputCls}
-              />
-            </label>
+          <div>
+            <div className="mb-1.5 flex items-baseline justify-between">
+              <span className="text-xs font-medium text-zinc-500">年份</span>
+              {value.sourceYear && (
+                <button
+                  type="button"
+                  onClick={() => set({ sourceYear: undefined })}
+                  className="text-[10px] text-zinc-400 hover:text-orange-600"
+                >
+                  清除年份
+                </button>
+              )}
+            </div>
+
+            {/* 常用年份快捷一键选择按钮 */}
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {[2026, 2025, 2024, 2023, 2022, 2021, 2020].map((y) => {
+                const active = value.sourceYear === y;
+                return (
+                  <button
+                    key={y}
+                    type="button"
+                    onClick={() =>
+                      set({
+                        sourceYear: active ? undefined : y,
+                        sourceKind: !value.sourceKind && !active ? '真题' : value.sourceKind,
+                      })
+                    }
+                    className={cn(
+                      'rounded-lg border px-2 py-0.5 text-xs transition-colors',
+                      active
+                        ? 'border-orange-300 bg-orange-50 font-medium text-orange-600'
+                        : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                    )}
+                  >
+                    {y}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <label className="block">
+                <select
+                  value={value.sourceYear ?? ''}
+                  onChange={(e) => {
+                    const y = e.target.value ? Number(e.target.value) : undefined;
+                    set({
+                      sourceYear: y,
+                      sourceKind: !value.sourceKind && y ? '真题' : value.sourceKind,
+                    });
+                  }}
+                  className={cn(inputCls, 'cursor-pointer')}
+                >
+                  <option value="">更多年份…</option>
+                  {Array.from({ length: 28 }, (_, i) => 2027 - i).map((y) => (
+                    <option key={y} value={y}>
+                      {y} 年
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="col-span-2 block">
+                <input
+                  value={value.sourcePaper ?? ''}
+                  onChange={(e) => {
+                    const paper = e.target.value;
+                    const autoKind: Partial<MetaValue> =
+                      !value.sourceKind && /真题|统考/.test(paper)
+                        ? { sourceKind: '真题' }
+                        : {};
+                    set({ sourcePaper: paper, ...autoKind });
+                  }}
+                  placeholder="卷子 / 讲义（如 839自控 / 李林四套）"
+                  className={inputCls}
+                />
+              </label>
+            </div>
           </div>
 
           <div>
@@ -475,6 +586,47 @@ export function MetadataFields({
           </label>
         </div>
       )}
+
+      {/* 修改知识点标签弹窗 */}
+      <Dialog
+        open={Boolean(editingTopic)}
+        onClose={() => setEditingTopic(null)}
+        title="修改知识点标签"
+        size="sm"
+      >
+        {editingTopic && (
+          <div className="space-y-3">
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-500">标签名称</span>
+              <input
+                value={editTopicName}
+                onChange={(e) => setEditTopicName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleSaveTopicName();
+                  }
+                }}
+                className={inputCls}
+                autoFocus
+              />
+            </label>
+            <div className="flex gap-2 pt-1">
+              <Button block variant="secondary" onClick={() => setEditingTopic(null)}>
+                取消
+              </Button>
+              <Button
+                block
+                variant="primary"
+                disabled={!editTopicName.trim()}
+                onClick={() => void handleSaveTopicName()}
+              >
+                保存修改
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

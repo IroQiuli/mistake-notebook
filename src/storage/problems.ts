@@ -135,6 +135,25 @@ export async function createTopic(subjectId: string, name: string): Promise<Topi
   return topic;
 }
 
+export async function updateTopic(id: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  await db.topics.update(id, { name: trimmed });
+}
+
+export async function deleteTopic(id: string): Promise<void> {
+  await db.transaction('rw', [db.topics, db.problems], async () => {
+    const problemsWithTopic = await db.problems.where('topicIds').equals(id).toArray();
+    for (const p of problemsWithTopic) {
+      await db.problems.update(p.id, {
+        topicIds: p.topicIds.filter((tId) => tId !== id),
+        updatedAt: Date.now(),
+      });
+    }
+    await db.topics.delete(id);
+  });
+}
+
 /**
  * 手动调权重（0~10）：
  * 1. 更新题目本身权重；

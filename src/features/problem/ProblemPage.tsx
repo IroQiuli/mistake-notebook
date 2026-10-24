@@ -580,8 +580,18 @@ export default function ProblemPage() {
           submitLabel="保存修改"
           defaultAdvanced
           onCancel={() => setEditOpen(false)}
-          onSubmit={async (value) => {
-            await updateProblem(problem.id, value);
+          onSubmit={async (value, answerBlobs) => {
+            let nextAnswerIds = problem.answerAssetIds;
+            if (answerBlobs && answerBlobs.length > 0) {
+              const ids: string[] = [];
+              for (const b of answerBlobs) {
+                const { canvas, width, height } = await prepareImage(b, 2400);
+                const blob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
+                ids.push(await putAsset(blob, 'answer', { width, height }));
+              }
+              nextAnswerIds = [...problem.answerAssetIds, ...ids].slice(0, 8);
+            }
+            await updateProblem(problem.id, { ...value, answerAssetIds: nextAnswerIds });
             setEditOpen(false);
             toast.show('已保存', 'success');
           }}

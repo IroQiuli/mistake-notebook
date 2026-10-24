@@ -96,4 +96,21 @@ describe('buildQueue', () => {
     const ids = buildQueue(ps, cs, { now: T0 }).map((x) => x.problem.id);
     expect(ids).toEqual(['a1', 'b1', 'a2', 'b2']);
   });
+
+  it('昨日没做完的逾期题目顺延到今日且排在最前', () => {
+    const ps = [
+      problem({ id: 'today1', subjectId: 's1' }),
+      problem({ id: 'yesterday_unfinished', subjectId: 's2' }),
+      problem({ id: 'today2', subjectId: 's2' }),
+    ];
+    const cs = [
+      card('today1', T0),
+      card('yesterday_unfinished', T0 - DAY, 0),
+      card('today2', T0),
+    ];
+    const queue = buildQueue(ps, cs, { now: T0 });
+    expect(queue[0].problem.id).toBe('yesterday_unfinished');
+    expect(queue[0].overdueDays).toBe(1);
+    expect(queue.slice(1).map((x) => x.problem.id)).toEqual(['today1', 'today2']);
+  });
 });

@@ -309,6 +309,11 @@ function ReviewBody({
               />
               <span className="font-mono font-medium">{formatStopwatch(timerSeconds)}</span>
             </button>
+            {current.overdueDays > 0 && (
+              <span className="flex h-10 items-center rounded-lg bg-rose-50 px-2 text-[10px] font-medium text-rose-600 border border-rose-200/70">
+                {current.overdueDays === 1 ? '昨日顺延' : `逾期${current.overdueDays}天`}
+              </span>
+            )}
             <div className="flex h-10 items-center gap-1 rounded-lg bg-zinc-50 px-2 text-[10px] text-zinc-500">
               权重 <span className="font-medium tabular-nums text-zinc-700">{weight}</span>
             </div>

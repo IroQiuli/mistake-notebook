@@ -236,7 +236,7 @@ export default function CapturePage() {
     }
   };
 
-  const save = async (value: MetaValue) => {
+  const save = async (value: MetaValue, answerBlobs: Blob[] = []) => {
     if (!crop) throw new Error('没有题目图片');
     const stemAssetId = await putAsset(crop.blob, 'stem', {
       width: crop.width,
@@ -250,11 +250,19 @@ export default function CapturePage() {
       stemAssetId
     );
 
+    const answerAssetIds: string[] = [];
+    for (const b of answerBlobs) {
+      const { canvas, width, height } = await prepareImage(b, 2400);
+      const blob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
+      const aid = await putAsset(blob, 'answer', { width, height });
+      answerAssetIds.push(aid);
+    }
+
     const id = await createProblem({
       ...value,
       stemAssetId,
       thumbAssetId,
-      answerAssetIds: [],
+      answerAssetIds,
     });
 
     if (activeDraftId) {
