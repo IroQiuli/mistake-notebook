@@ -260,3 +260,34 @@
 - **静态类型检查**：执行 `npx tsc --noEmit` 零报错。
 - **PWA 构建**：执行 `npx vite build` 成功打包生成生产环境产物。
 - **版本库同步**：已成功推送到 GitHub 远程仓库 `main` 分支。
+
+---
+
+## 变更批次六：平板端壁纸空白问题修复（路径解析与 WebKit 层叠上下文适配）
+- **时间**：2026-10-24
+- **Git 分支**：`main`（推送到 GitHub 远程仓库）
+- **核心诉求**：
+  - 用户反馈：“我在电脑端可以显示壁纸，但是在平板上却是空的？怎么回事”。
+- **根因分析**：
+  1. **GitHub Pages 二级子路径 404 陷阱**：
+     - GitHub Pages 部署路径为 `https://iroqiuli.github.io/mistake-notebook/`；
+     - 原代码中的预设壁纸路径写成了以斜杠开头的根绝对路径 `/themes/miku/miku-starry-4k.jpg`；
+     - 电脑端因本地开发服务器根目录就是 `/`，所以碰巧能显示；而平板端访问 GitHub Pages 时，浏览器向 `iroqiuli.github.io/themes/...` 发起请求，触发 404 资源不存在！
+  2. **移动端 WebKit 层叠遮挡问题**：
+     - 外层 Shell 容器带有 Tailwind `bg-zinc-50`（不透明浅灰底），在 iPadOS/WebKit 移动端排版合成中直接绘制并遮挡了位于 `z-0` 的固定背景层；
+  3. **PWA Workbox 离线缓存缺失**：
+     - `vite.config.ts` 中的 `globPatterns` 仅缓存了 `js,css,html,png,svg,woff2`，漏掉了 `jpg` 格式，导致平板端 PWA 无法离线命中 4K 壁纸。
+- **修复方案**：
+  1. **动态多端路径解析 (`src/lib/themeUrl.ts`)**：
+     - 封装 `resolveThemeUrl`，自动读取 `import.meta.env.BASE_URL` 动态补齐子路径前缀，确保在本地开发（`/`）和 GitHub Pages（`/mistake-notebook/`）下 100% 准确命中资源；
+  2. **容器与全局背景穿透 (`src/App.tsx` & `src/index.css`)**：
+     - 当开启壁纸时，外层容器自动切换为 `bg-transparent`，并在 `src/index.css` 中声明 `html.has-wallpaper body, #root { background-color: transparent !important; }`，杜绝任何不透明底色遮挡；
+     - 背景层添加硬件加速属性 `translateZ(0)`，防止 Safari/WebKit 在高分屏下的渲染丢帧；
+  3. **PWA 预缓存扩容 (`vite.config.ts`)**：
+     - 将 `jpg,jpeg,webp` 纳入 Workbox 预缓存列表并扩容至 8MB，让平板端 4K 壁纸秒开且完全支持离线显示。
+
+### 验证结论（批次六）
+- **单测套件**：执行 `npm test`，全部 133 项单元测试 100% 通过。
+- **静态类型检查**：执行 `npx tsc --noEmit` 零报错。
+- **PWA 构建**：打包产物生成 16 个 precache 条目（包含 4K 壁纸全部打入），验证通过。
+- **GitHub 同步**：提交并推送到 GitHub `main` 分支。

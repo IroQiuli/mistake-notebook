@@ -33,6 +33,7 @@ import {
   MikuSettingsIcon,
   MikuStatsIcon,
 } from './ui/MikuIcons';
+import { resolveThemeUrl } from './lib/themeUrl';
 
 const NAV = [
   { to: '/', label: '首页', defaultIcon: CalendarDays, mikuIcon: MikuHomeIcon },
@@ -151,20 +152,21 @@ function Shell() {
   const isMiku = theme === 'miku';
   // Miku 主题下若未设置壁纸，默认使用精选 4K 星空壁纸
   const activeWallpaper = isMiku
-    ? (wallpaperSetting || '/themes/miku/miku-starry-4k.jpg')
+    ? (wallpaperSetting || 'themes/miku/miku-starry-4k.jpg')
     : wallpaperSetting;
+  const resolvedWallpaper = resolveThemeUrl(activeWallpaper);
 
   useEffect(() => {
     if (isMiku) {
       document.documentElement.setAttribute('data-theme', 'miku');
       document.title = '初音未来 · 考研伴学错题簿';
       const iconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-      if (iconLink) iconLink.href = './themes/miku/miku-icon.svg';
+      if (iconLink) iconLink.href = resolveThemeUrl('themes/miku/miku-icon.svg');
     } else {
       document.documentElement.removeAttribute('data-theme');
       document.title = '错题簿';
       const iconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-      if (iconLink) iconLink.href = './icon-192.png';
+      if (iconLink) iconLink.href = resolveThemeUrl('icon-192.png');
     }
 
     if (activeWallpaper) {
@@ -175,16 +177,20 @@ function Shell() {
   }, [isMiku, activeWallpaper]);
 
   return (
-    <div className="min-h-full bg-zinc-50 md:flex relative">
+    <div className={cn('min-h-full md:flex relative transition-colors', activeWallpaper ? 'bg-transparent' : 'bg-zinc-50')}>
       {/* 4K 壁纸层与遮罩 */}
-      {activeWallpaper && (
-        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+      {resolvedWallpaper && (
+        <div
+          className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
+          style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)' }}
+        >
           <div
             className="absolute inset-0 bg-cover bg-center transition-all duration-300"
             style={{
-              backgroundImage: `url(${activeWallpaper})`,
+              backgroundImage: `url(${resolvedWallpaper})`,
               filter: wallpaperBlur > 0 ? `blur(${wallpaperBlur}px)` : undefined,
-              transform: wallpaperBlur > 0 ? 'scale(1.04)' : undefined,
+              transform: wallpaperBlur > 0 ? 'scale(1.04) translateZ(0)' : 'translateZ(0)',
+              WebkitTransform: wallpaperBlur > 0 ? 'scale(1.04) translateZ(0)' : 'translateZ(0)',
             }}
           />
           {wallpaperMask > 0 && (

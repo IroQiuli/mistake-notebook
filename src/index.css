@@ -35,6 +35,12 @@
 }
 
 /* 4K 壁纸沉浸模式下的适中磨砂毛玻璃效果（确保文字与公式高对比度） */
+html.has-wallpaper,
+html.has-wallpaper body,
+html.has-wallpaper #root {
+  background-color: transparent !important;
+}
+
 [data-theme="miku"].has-wallpaper {
   --glass-bg: rgba(255, 255, 255, 0.82);
   --glass-border: rgba(57, 197, 187, 0.22);

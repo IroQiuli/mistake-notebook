@@ -28,6 +28,7 @@ import { collectOrphans, formatBytes, storageUsage } from '../../storage/assets'
 import { createChapter } from '../../storage/problems';
 import { canvasToBlob, prepareImage } from '../capture/pipeline';
 import { formatDateTime } from '../../domain/time';
+import { resolveThemeUrl } from '../../lib/themeUrl';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import { useToast } from '../../ui/Toast';
@@ -415,24 +416,26 @@ export default function SettingsPage() {
                 id: 'starry',
                 name: '星空浅葱',
                 tag: '4K · 推荐',
-                url: '/themes/miku/miku-starry-4k.jpg',
+                url: 'themes/miku/miku-starry-4k.jpg',
               },
               {
                 id: 'galaxy',
                 name: '宇宙银河',
                 tag: '4K · 璀璨',
-                url: '/themes/miku/miku-galaxy-4k.jpg',
+                url: 'themes/miku/miku-galaxy-4k.jpg',
               },
               {
                 id: 'classic',
                 name: '经典立绘',
                 tag: '4K · 标志',
-                url: '/themes/miku/miku-classic-4k.jpg',
+                url: 'themes/miku/miku-classic-4k.jpg',
               },
             ].map((preset) => {
               const active =
                 wallpaper === preset.url ||
+                wallpaper === '/' + preset.url ||
                 (!wallpaper && theme === 'miku' && preset.id === 'starry');
+              const resolvedUrl = resolveThemeUrl(preset.url);
               return (
                 <button
                   key={preset.id}
@@ -450,7 +453,7 @@ export default function SettingsPage() {
                 >
                   <div
                     className="h-16 w-full bg-cover bg-center transition-transform group-hover:scale-105"
-                    style={{ backgroundImage: `url(${preset.url})` }}
+                    style={{ backgroundImage: `url(${resolvedUrl})` }}
                   />
                   <div className="p-1.5 bg-white/95 backdrop-blur">
                     <div className="text-[11px] font-medium text-zinc-800 truncate">
