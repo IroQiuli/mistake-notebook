@@ -229,4 +229,34 @@
 - **单测套件**：执行 `npm test`，全部 22 个测试文件、132 个单元测试保持 100% 通过（零回归）。
 - **静态类型检查**：执行 `npx tsc --noEmit` 零报错，严格类型安全。
 - **PWA 构建**：执行 `npx vite build` 打包成功，产物正常生成。
-- **Git 状态**：改动已保存在独立本地分支 `demo-hatsune-miku-theme`，**未推送到 GitHub 远程仓库**。
+- **Git 状态**：改动已保存在独立本地分支 `demo-hatsune-miku-theme`。
+
+---
+
+## 变更批次五：做题评分算法修复（杜绝前三按钮为今天）、初音未来全套小组件Icon与专属启动画面、同步至 GitHub
+- **时间**：2026-10-24
+- **Git 分支**：`demo-hatsune-miku-theme` 合并入 `main` 并推送到 GitHub 远程仓库
+- **核心诉求**：
+  1. **做题评分选项为「今天」的算法 Bug 彻底根治**：
+     - 用户反馈：“为什么我的今日清单下方前三个按钮点击后都是‘今天’”。
+     - 查明原因：`ts-fsrs` 默认配置中开启了生词卡单日短步长（`enable_short_term: true`，学习步长 `1m, 10m`），导致新题和重学题的前三个评分（忘记、困难、良好）仅被安排在 1分钟、5分钟、10分钟后，被 `dayDiff` 判定为同一个学习日（`diff === 0`），使得页面显示均为“今天”，且做完依然停留在今天。
+     - 修复方案：在 `src/domain/scheduler.ts` 中配置 `enable_short_term: false`，明确考研错题复习以天（学习日）为最小周期，评分后最低推进 1 天（明天），严格保持阶梯递增（忘记 $\ge$ 明天、困难 $\ge$ 2天后、良好 $\ge$ 3天后、简单 $\ge$ 8天后）。
+  2. **初音未来全套小组件 Icon 定制** (`src/ui/MikuIcons.tsx` & `src/App.tsx`)：
+     - 首页 (Home)：初音未来经典象征「大葱 (Negi)」标志图标；
+     - 错题本 (Library)：葱绿乐谱 / 活页试卷夹 (Music Binder) 图标；
+     - 录题 (Capture)：现场收音舞台麦克风与灵感星芒 (Stage Mic) 图标；
+     - 统计 (Stats)：跳动的音律音频波形频谱 (Soundwave Equalizer) 图标；
+     - 我的 (Settings)：初音未来标志性头戴式赛博耳机与发带方块 (Miku Headset) 图标；
+     - 首页环形进度条 `ProgressRing` 自动响应初音 `#39c5bb` 专属葱绿。
+  3. **软件专属 Icon 与 PWA 启动画面 (Splash Screen)** (`index.html` & `public/themes/miku/` & `src/main.tsx`)：
+     - 设计并生成 `public/themes/miku/miku-icon.svg` 高清矢量图标（包含 01 霓虹铭牌、初音蓝绿底色、粉色发圈与 39 标识）；
+     - 在 `index.html` 中注入 Miku 专属冷启动 Splash 画面：带有 01 霓虹呼吸徽标、5 段音乐跳动音频条动效与“初音ミク · 考研伴学错题簿”伴学标语，React 挂载后通过 `src/main.tsx` 平滑淡出；
+     - 动态切换主题 Favicon 与网页标题（“初音未来 · 考研伴学错题簿”）。
+  4. **全量合并与 GitHub 同步**：
+     - 将上述所有初音主题实现、4K 壁纸、图标体系以及做题排期 Bug 修复，全量合并至 `main` 分支并执行 `git push origin main`。
+
+### 验证结论（批次五）
+- **单测套件**：执行 `npm test`，全部 22 个测试文件、133 个单元测试全部 100% 通过（新增针对四档评分排期天数推进的严格单测）。
+- **静态类型检查**：执行 `npx tsc --noEmit` 零报错。
+- **PWA 构建**：执行 `npx vite build` 成功打包生成生产环境产物。
+- **版本库同步**：已成功推送到 GitHub 远程仓库 `main` 分支。

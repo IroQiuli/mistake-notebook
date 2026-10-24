@@ -26,12 +26,20 @@ import SettingsPage from './features/settings/SettingsPage';
 import StatsPage from './features/stats/StatsPage';
 import PaperPage from './features/paper/PaperPage';
 
+import {
+  MikuCaptureIcon,
+  MikuHomeIcon,
+  MikuLibraryIcon,
+  MikuSettingsIcon,
+  MikuStatsIcon,
+} from './ui/MikuIcons';
+
 const NAV = [
-  { to: '/', label: '首页', icon: CalendarDays },
-  { to: '/library', label: '错题本', icon: Layers },
-  { to: '/capture', label: '录入', icon: Plus },
-  { to: '/stats', label: '统计', icon: BarChart3 },
-  { to: '/settings', label: '我的', icon: Settings },
+  { to: '/', label: '首页', defaultIcon: CalendarDays, mikuIcon: MikuHomeIcon },
+  { to: '/library', label: '错题本', defaultIcon: Layers, mikuIcon: MikuLibraryIcon },
+  { to: '/capture', label: '录入', defaultIcon: Plus, mikuIcon: MikuCaptureIcon },
+  { to: '/stats', label: '统计', defaultIcon: BarChart3, mikuIcon: MikuStatsIcon },
+  { to: '/settings', label: '我的', defaultIcon: Settings, mikuIcon: MikuSettingsIcon },
 ];
 
 /**
@@ -149,8 +157,14 @@ function Shell() {
   useEffect(() => {
     if (isMiku) {
       document.documentElement.setAttribute('data-theme', 'miku');
+      document.title = '初音未来 · 考研伴学错题簿';
+      const iconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+      if (iconLink) iconLink.href = './themes/miku/miku-icon.svg';
     } else {
       document.documentElement.removeAttribute('data-theme');
+      document.title = '错题簿';
+      const iconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+      if (iconLink) iconLink.href = './icon-192.png';
     }
 
     if (activeWallpaper) {
@@ -210,26 +224,29 @@ function Shell() {
           </div>
         </div>
         <nav className="flex flex-col gap-1">
-          {NAV.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-                  isActive
-                    ? isMiku
-                      ? 'bg-teal-50 text-teal-600 font-semibold shadow-xs'
-                      : 'bg-orange-50 text-orange-600'
-                    : 'text-zinc-600 hover:bg-zinc-100/70'
-                )
-              }
-            >
-              <Icon size={18} />
-              {label}
-            </NavLink>
-          ))}
+          {NAV.map((item) => {
+            const Icon = isMiku ? item.mikuIcon : item.defaultIcon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                    isActive
+                      ? isMiku
+                        ? 'bg-teal-50 text-teal-600 font-semibold shadow-xs ring-1 ring-teal-200/40'
+                        : 'bg-orange-50 text-orange-600'
+                      : 'text-zinc-600 hover:bg-zinc-100/70'
+                  )
+                }
+              >
+                <Icon size={18} />
+                {item.label}
+              </NavLink>
+            );
+          })}
         </nav>
         <div className="mt-auto px-3 text-[11px] leading-relaxed text-zinc-400">
           {isMiku ? (
@@ -260,22 +277,25 @@ function Shell() {
             className="mx-auto grid max-w-md"
             style={{ gridTemplateColumns: `repeat(${NAV.length}, minmax(0, 1fr))` }}
           >
-            {NAV.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === '/'}
-                className={({ isActive }) =>
-                  cn(
-                    'flex flex-col items-center gap-0.5 py-2 text-[11px]',
-                    isActive ? (isMiku ? 'text-teal-600 font-semibold' : 'text-orange-600') : 'text-zinc-500'
-                  )
-                }
-              >
-                <Icon size={20} />
-                {label}
-              </NavLink>
-            ))}
+            {NAV.map((item) => {
+              const Icon = isMiku ? item.mikuIcon : item.defaultIcon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex flex-col items-center gap-0.5 py-2 text-[11px]',
+                      isActive ? (isMiku ? 'text-teal-600 font-semibold' : 'text-orange-600') : 'text-zinc-500'
+                    )
+                  }
+                >
+                  <Icon size={20} />
+                  {item.label}
+                </NavLink>
+              );
+            })}
           </div>
         </nav>
       )}

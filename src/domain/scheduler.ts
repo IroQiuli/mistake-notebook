@@ -1,6 +1,7 @@
 import {
   createEmptyCard,
   fsrs,
+  generatorParameters,
   Rating as FsrsRating,
   State,
   type Card as FsrsCard,
@@ -11,8 +12,17 @@ import { intervalFactor } from './weight';
 
 const DAY = 24 * 3600 * 1000;
 
-/** 目标保留率 90%，关闭随机抖动以保证同一操作得到确定结果 */
-const engine = fsrs({ request_retention: 0.9, enable_fuzz: false });
+/**
+ * 考研错题本按天（学习日）进行长程间隔复习，不采用生词卡单日内短步长循环 (1m/5m/10m)，
+ * 因此关闭 enable_short_term，使四档评分直接以整天推进 (至少明天)，杜绝评完仍落回「今天」。
+ */
+const engine = fsrs(
+  generatorParameters({
+    request_retention: 0.9,
+    enable_fuzz: false,
+    enable_short_term: false,
+  })
+);
 
 const GRADE: Record<Rating, Grade> = {
   1: FsrsRating.Again,
@@ -100,16 +110,21 @@ export function applyRating(
   const result = engine.next(toFsrs(card), new Date(now), GRADE[rating]);
   const next = fromFsrs(card.problemId, result.card);
   next.due = applyWeightToDue(next.due, now, weight);
+  // 确保评分后 next.due 至少在明天（>= now + DAY），绝不落入今天
+  if (next.due < now + DAY) {
+    next.due = now + DAY;
+  }
   return { card: next, nextDue: next.due, prevDue: card.due, prevState: card.state };
 }
 
 /**
  * 用权重缩放 FSRS 给出的间隔：权重低就提前，权重高就推后。
- * 不足 1 天的学习步长（分钟级）不缩放，否则会把「当天再练一次」挤掉。
+ * 考研错题复习以天为最小单位，最低间隔保证为 1 天（即明天），绝不落回今天。
  */
 function applyWeightToDue(due: number, now: number, weight?: number): number {
-  const days = (due - now) / DAY;
-  if (!Number.isFinite(days) || days < 1) return due;
+  const rawDays = (due - now) / DAY;
+  if (!Number.isFinite(rawDays)) return now + DAY;
+  const days = Math.max(1, Math.round(rawDays));
   const scaled = Math.max(1, Math.round(days * intervalFactor(weight)));
   return now + scaled * DAY;
 }
@@ -117,7 +132,17 @@ function applyWeightToDue(due: number, now: number, weight?: number): number {
 export function previewIntervals(card: Card, now: number, weight?: number): Record<Rating, number> {
   const scheduling = engine.repeat(toFsrs(card), new Date(now));
   const at = (r: Rating) => applyWeightToDue(scheduling[GRADE[r]].card.due.getTime(), now, weight);
-  return { 1: at(1), 2: at(2), 3: at(3), 4: at(4) };
+  const p1 = at(1);
+  let p2 = at(2);
+  let p3 = at(3);
+  let p4 = at(4);
+
+  // 严格阶梯递增：忘记 < 困难 < 良好 < 简单，且各档最少差 1 天
+  if (p2 <= p1) p2 = p1 + DAY;
+  if (p3 <= p2) p3 = p2 + DAY;
+  if (p4 <= p3) p4 = p3 + DAY;
+
+  return { 1: p1, 2: p2, 3: p3, 4: p4 };
 }
 
 /** 当前时刻「还记得」的预测概率（0–1）。新题/没复习过返回 0 */

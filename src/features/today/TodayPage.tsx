@@ -12,21 +12,39 @@ import { EmptyState } from '../../ui/EmptyState';
 import { cn } from '../../ui/cn';
 import { DetailDialog, type DetailMode } from './DetailDialog';
 
-function ProgressRing({ done, goal, size = 62 }: { done: number; goal: number; size?: number }) {
+function ProgressRing({
+  done,
+  goal,
+  size = 62,
+  isMiku = false,
+}: {
+  done: number;
+  goal: number;
+  size?: number;
+  isMiku?: boolean;
+}) {
   const pct = Math.min(1, done / Math.max(1, goal));
   const radius = size / 2 - 4;
   const circumference = 2 * Math.PI * radius;
+  const strokeColor = isMiku ? '#39c5bb' : '#f97316';
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg viewBox={`0 0 ${size} ${size}`} className="-rotate-90" width={size} height={size}>
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#f4f4f5" strokeWidth="7" />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={isMiku ? 'rgba(57, 197, 187, 0.15)' : '#f4f4f5'}
+          strokeWidth="7"
+        />
         {pct > 0 && (
           <circle
             cx={size / 2}
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke="#f97316"
+            stroke={strokeColor}
             strokeWidth="7"
             strokeLinecap="round"
             strokeDasharray={`${pct * circumference} ${circumference}`}
@@ -325,7 +343,7 @@ export default function TodayPage() {
               )}
             </div>
           </div>
-          <ProgressRing done={todayReviewed} goal={plan} size={66} />
+          <ProgressRing done={todayReviewed} goal={plan} size={66} isMiku={isMiku} />
         </div>
 
         {queue.length === 0 && todayReviewed > 0 && (

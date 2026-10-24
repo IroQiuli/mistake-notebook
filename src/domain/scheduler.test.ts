@@ -60,6 +60,27 @@ describe('FSRS 封装', () => {
     const p = previewIntervals(card, T0 + 3 * DAY);
     expect(p[1]).toBeLessThan(p[2]);
     expect(p[2]).toBeLessThan(p[3]);
-    expect(p[1]).toBeGreaterThan(T0);
+    expect(p[3]).toBeLessThan(p[4]);
+    expect(p[1]).toBeGreaterThanOrEqual(T0 + 3 * DAY + DAY);
+  });
+
+  it('做题时前三档评分绝不落入今天，全部推进到明天及以后', () => {
+    const card = newCard(T0, 'p1');
+    const p = previewIntervals(card, T0);
+    // 忘记至少明天（T0 + 1天），困难至少后天（T0 + 2天），良好至少3天后
+    expect(p[1]).toBeGreaterThanOrEqual(T0 + DAY);
+    expect(p[2]).toBeGreaterThanOrEqual(T0 + 2 * DAY);
+    expect(p[3]).toBeGreaterThanOrEqual(T0 + 3 * DAY);
+    expect(p[4]).toBeGreaterThanOrEqual(T0 + 4 * DAY);
+
+    // 实际打分执行同样至少安排在明天
+    const resAgain = applyRating(card, 1, T0);
+    expect(resAgain.nextDue).toBeGreaterThanOrEqual(T0 + DAY);
+
+    const resHard = applyRating(card, 2, T0);
+    expect(resHard.nextDue).toBeGreaterThanOrEqual(T0 + 2 * DAY);
+
+    const resGood = applyRating(card, 3, T0);
+    expect(resGood.nextDue).toBeGreaterThanOrEqual(T0 + 3 * DAY);
   });
 });

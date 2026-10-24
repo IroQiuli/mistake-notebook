@@ -10,3 +10,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <App />
   </React.StrictMode>
 );
+
+// 启动画面平滑淡出
+const splash = document.getElementById('splash-screen');
+if (splash) {
+  setTimeout(() => {
+    splash.style.opacity = '0';
+    splash.style.pointerEvents = 'none';
+    setTimeout(() => splash.remove(), 450);
+  }, 400);
+}
