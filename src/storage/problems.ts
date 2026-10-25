@@ -73,6 +73,15 @@ export async function reschedule(id: string, due: number): Promise<void> {
   });
 }
 
+/** 单题加练：把指定题目提前拉入今日复习队列 */
+export async function practiceProblem(problemId: string): Promise<boolean> {
+  const now = Date.now();
+  const card = await db.cards.get(problemId);
+  if (!card) return false;
+  await db.cards.update(problemId, { due: now });
+  return true;
+}
+
 /**
  * 章节加练：把该章节里「还没到期」的题提前拉到今天，最多 limit 道。
  * 优先挑记忆最弱的（stability 最小），不影响 FSRS 参数。

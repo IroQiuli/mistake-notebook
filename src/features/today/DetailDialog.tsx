@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useGo } from '../../hooks/useBack';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, History } from 'lucide-react';
 import { db } from '../../storage/db';
 import { dayKey, formatDateTime, learningDayStart } from '../../domain/time';
 import { displayTitle } from '../../domain/title';
@@ -185,6 +185,19 @@ export function DetailDialog({
         ) : (
           renderGroups(todayList)
         )}
+        <div className="mt-4 border-t border-zinc-100 pt-3">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              go('/history');
+            }}
+            className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-teal-200/80 bg-teal-50/60 py-2.5 text-xs font-semibold text-teal-700 hover:bg-teal-100/80 active:scale-95 transition-all shadow-xs"
+          >
+            <History size={14} />
+            查看往日完整做题记录与足迹 →
+          </button>
+        </div>
       </Dialog>
     );
   }
@@ -235,6 +248,19 @@ export function DetailDialog({
         ) : (
           renderGroups(selectedDay.list)
         )}
+        <div className="mt-4 border-t border-zinc-100 pt-3">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              go('/history');
+            }}
+            className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-teal-200/80 bg-teal-50/60 py-2.5 text-xs font-semibold text-teal-700 hover:bg-teal-100/80 active:scale-95 transition-all shadow-xs"
+          >
+            <History size={14} />
+            查看往日完整做题记录与足迹 →
+          </button>
+        </div>
       </Dialog>
     );
   }

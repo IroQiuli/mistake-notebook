@@ -84,8 +84,37 @@ export interface ChapterMastery {
 }
 
 /**
+ * 计算单个题目的保持率（0–1）：
+ * - 归档（p.archivedAt）或标记为掌握等级（p.mastery === 4）的题：视为 100% (1.0)；
+ * - 已经复习过（card.state !== 0 且 card.lastReview）的题：按 FSRS 动态遗忘曲线计算；
+ * - 新题/未复习过的题：
+ *   若带有掌握度评级：
+ *     - 3 (记得 / 基本掌握) -> 0.75
+ *     - 2 (模糊 / 不熟练)   -> 0.50
+ *     - 1 (忘记 / 完全不会) -> 0.25
+ *   若未评级，则按 0 计（等待首次复习建立初始记忆基准）。
+ */
+export function problemRetention(
+  p: Problem,
+  card: Card | undefined,
+  now: number
+): number {
+  if (p.archivedAt || p.mastery === 4) {
+    return 1;
+  }
+  if (card && card.state !== 0 && card.lastReview) {
+    return retrievability(card, now);
+  }
+  if (p.mastery === 3) return 0.75;
+  if (p.mastery === 2) return 0.50;
+  if (p.mastery === 1) return 0.25;
+
+  return 0;
+}
+
+/**
  * 章节掌握度 = 该章节所有题目的平均记忆保持率（FSRS 预测「现在还记得」的概率）。
- * 已归档的题视为 100%。只返回有题目的章节。
+ * 已归档或已标记掌握（mastery: 4）的题视为 100%。只返回有题目的章节。
  */
 export function chapterMastery(
   problems: Problem[],
@@ -113,13 +142,14 @@ export function chapterMastery(
     let due = 0;
     for (const p of list) {
       const card = cardMap.get(p.id);
-      if (p.archivedAt) {
+      const isMastered = Boolean(p.archivedAt || p.mastery === 4);
+      if (isMastered) {
         archived++;
         sum += 1;
-        continue;
+      } else {
+        sum += problemRetention(p, card, now);
       }
-      sum += card ? retrievability(card, now) : 0;
-      if (card && card.due <= end) due++;
+      if (card && card.due <= end && !p.archivedAt) due++;
     }
 
     out.push({
@@ -142,9 +172,9 @@ export function overallRetention(problems: Problem[], cards: Card[], now: number
   let sum = 0;
   let n = 0;
   for (const p of problems) {
-    if (p.archivedAt) continue;
+    if (p.archivedAt || p.mastery === 4) continue;
     const card = cardMap.get(p.id);
-    sum += card ? retrievability(card, now) : 0;
+    sum += problemRetention(p, card, now);
     n++;
   }
   return n ? sum / n : 0;

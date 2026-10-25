@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useGo } from '../../hooks/useBack';
-import { BarChart3, ChevronDown, Download, FileSpreadsheet } from 'lucide-react';
+import { BarChart3, ChevronDown, ChevronRight, Download, FileSpreadsheet, History } from 'lucide-react';
 import { db } from '../../storage/db';
 import { Donut, HBars, LineChart, VBars } from '../../ui/charts';
 import { downloadChartPng, downloadCsv } from '../../lib/exportChart';
@@ -26,16 +26,18 @@ import { useToast } from '../../ui/Toast';
 import { learningDayStart } from '../../domain/time';
 import { cn } from '../../ui/cn';
 import { EmptyState } from '../../ui/EmptyState';
+import { HistoryView } from '../history/HistoryView';
 
 const WEEKS = 16;
 const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
 
 type ChartKey = 'trend' | 'accuracy' | 'tags' | 'mastery' | 'volume';
 
-type StatsView = 'overview' | 'charts' | 'deep';
+type StatsView = 'overview' | 'history' | 'charts' | 'deep';
 
 const VIEWS: { key: StatsView; label: string }[] = [
   { key: 'overview', label: '概览' },
+  { key: 'history', label: '做题足迹' },
   { key: 'charts', label: '图表' },
   { key: 'deep', label: '深入分析' },
 ];
@@ -58,9 +60,9 @@ function heatLevel(n: number): string {
 }
 
 function masteryColor(r: number): string {
-  if (r < 0.4) return 'bg-red-400';
+  if (r < 0.4) return 'bg-rose-500';
   if (r < 0.6) return 'bg-amber-400';
-  if (r < 0.8) return 'bg-orange-400';
+  if (r < 0.8) return 'bg-teal-400';
   return 'bg-emerald-500';
 }
 
@@ -236,16 +238,37 @@ export default function StatsPage() {
   const [chart, setChart] = useState<ChartKey>('trend');
   const chartRef = useRef<HTMLDivElement>(null);
 
+  const [params, setParams] = useSearchParams();
+  const urlView = params.get('view') as StatsView | null;
+
   const [view, setView] = useState<StatsView>(() => {
+    if (urlView === 'charts' || urlView === 'deep' || urlView === 'history' || urlView === 'overview') {
+      return urlView;
+    }
     try {
       const saved = localStorage.getItem('statsView') as StatsView | null;
-      return saved === 'charts' || saved === 'deep' ? saved : 'overview';
+      return saved === 'charts' || saved === 'deep' || saved === 'history' ? saved : 'overview';
     } catch {
       return 'overview';
     }
   });
+
+  useEffect(() => {
+    if (
+      urlView &&
+      urlView !== view &&
+      (urlView === 'charts' || urlView === 'deep' || urlView === 'history' || urlView === 'overview')
+    ) {
+      setView(urlView);
+    }
+  }, [urlView, view]);
+
   const changeView = (next: StatsView) => {
     setView(next);
+    const nextParams = new URLSearchParams(params);
+    if (next === 'overview') nextParams.delete('view');
+    else nextParams.set('view', next);
+    setParams(nextParams, { replace: true });
     try {
       localStorage.setItem('statsView', next);
     } catch {
@@ -508,6 +531,33 @@ export default function StatsPage() {
             </div>
           </section>
 
+          {/* 往日做题足迹快捷入口 */}
+          <section
+            onClick={() => changeView('history')}
+            className="flex items-center justify-between rounded-2xl border border-teal-200/80 bg-teal-50/40 p-3.5 cursor-pointer hover:bg-teal-50/80 transition-colors shadow-xs group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500 text-white shadow-xs group-hover:scale-105 transition-transform">
+                <History size={20} />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-zinc-900 flex items-center gap-1.5">
+                  往日做题记录 · 历史足迹
+                  <span className="rounded-full bg-teal-100 px-1.5 py-0.2 text-[10px] font-medium text-teal-700">
+                    {logs.length} 次
+                  </span>
+                </div>
+                <div className="text-[11px] text-zinc-500">
+                  按天时间线回顾以往做题用时、攻克率与错因心得明细
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-xs font-medium text-teal-700 group-hover:translate-x-0.5 transition-transform">
+              <span>查看明细</span>
+              <ChevronRight size={14} />
+            </div>
+          </section>
+
           {weakest.length > 0 && (
             <section className="rounded-2xl border border-zinc-200 bg-white p-4">
               <div className="mb-3 flex items-baseline justify-between">
@@ -520,7 +570,14 @@ export default function StatsPage() {
                     <span className="w-4 shrink-0 text-center text-[10px] tabular-nums text-zinc-300">
                       {i + 1}
                     </span>
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: subjectMap.get(m.subjectId)?.color }}
+                    />
                     <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-700">
+                      <span className="text-zinc-400 mr-1 text-[10px]">
+                        {subjectMap.get(m.subjectId)?.name.replace('839 自动控制原理及过程控制', '839 自控')} ·
+                      </span>
                       {m.chapterName}
                     </span>
                     <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">
@@ -546,6 +603,8 @@ export default function StatsPage() {
           )}
         </>
       )}
+
+      {view === 'history' && <HistoryView standalone={false} />}
 
       {view === 'charts' && (
 
@@ -783,9 +842,9 @@ export default function StatsPage() {
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-sm font-medium text-zinc-800">章节掌握度</h2>
           <span className="text-[10px] text-zinc-400">
-            {mastery.length
-              ? `最弱：${mastery[0].chapterName} ${Math.round(mastery[0].retention * 100)}%`
-              : '还没有错题'}
+            {visibleMastery.length
+              ? `最弱：${visibleMastery[0].chapterName} ${Math.round(visibleMastery[0].retention * 100)}%`
+              : '这个科目还没有错题'}
           </span>
         </div>
 
@@ -880,7 +939,7 @@ export default function StatsPage() {
 
         <p className="mt-3 text-[10px] leading-relaxed text-zinc-400">
           掌握度 = 该章节题目的平均记忆保持率（FSRS 预测「现在还记得」的概率），
-          已标记掌握的题按 100% 计。点章节看错题，点「加练」把最弱的 5 道提前到今天。
+          已标记掌握或评级为掌握的题按 100% 计。点章节看错题，点「加练」把最弱的 5 道提前到今天。
         </p>
       </section>
         </>

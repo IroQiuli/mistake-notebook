@@ -8,7 +8,7 @@ import {
   useLocation,
   useNavigationType,
 } from 'react-router-dom';
-import { BarChart3, CalendarDays, Layers, Plus, Settings } from 'lucide-react';
+import { BarChart3, CalendarDays, History, Layers, Plus, Settings } from 'lucide-react';
 import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getSetting } from './storage/db';
@@ -24,6 +24,7 @@ import CapturePage from './features/capture/CapturePage';
 import ReviewPage from './features/review/ReviewPage';
 import SettingsPage from './features/settings/SettingsPage';
 import StatsPage from './features/stats/StatsPage';
+import HistoryPage from './features/history/HistoryPage';
 import PaperPage from './features/paper/PaperPage';
 
 import {
@@ -254,6 +255,22 @@ function Shell() {
               </NavLink>
             );
           })}
+          <NavLink
+            to="/history"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                isActive
+                  ? isMiku
+                    ? 'bg-teal-50 text-teal-600 font-semibold shadow-xs ring-1 ring-teal-200/40'
+                    : 'bg-orange-50 text-orange-600'
+                  : 'text-zinc-600 hover:bg-zinc-100/70'
+              )
+            }
+          >
+            <History size={18} className={isMiku ? 'text-teal-500' : 'text-orange-500'} />
+            做题足迹
+          </NavLink>
         </nav>
         <div className="mt-auto px-3 text-[11px] leading-relaxed text-zinc-400">
           {isMiku ? (
@@ -337,6 +354,7 @@ export default function App() {
             <Route path="/problem/:id" element={<ProblemPage />} />
             <Route path="/capture" element={<CapturePage />} />
             <Route path="/stats" element={<StatsPage />} />
+            <Route path="/history" element={<HistoryPage />} />
             <Route path="/paper" element={<PaperPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>

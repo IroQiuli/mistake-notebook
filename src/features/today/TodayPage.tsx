@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronRight, FileStack, Flame, ListOrdered, Plus } from 'lucide-react';
+import { ChevronRight, FileStack, Flame, History, ListOrdered, Plus } from 'lucide-react';
 import { db, getSetting } from '../../storage/db';
 import { buildQueue, getTodayReviewedBySubject, getTodayReviewedIds } from '../../domain/queue';
 import { formatToday, learningDayEnd, learningDayStart } from '../../domain/time';
@@ -502,6 +502,39 @@ export default function TodayPage() {
             <div className="mt-0.5 text-[11px] text-zinc-500">{s.label}</div>
           </button>
         ))}
+      </section>
+
+      {/* 往日做题足迹快速入口 */}
+      <section
+        onClick={() => navigate('/history')}
+        className={cn(
+          'flex items-center justify-between rounded-2xl border bg-white px-4 py-3 cursor-pointer hover:shadow-xs transition-all group',
+          isMiku ? 'border-teal-200/80 hover:border-teal-300' : 'border-zinc-200 hover:border-zinc-300'
+        )}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className={cn(
+              'flex h-8 w-8 items-center justify-center rounded-xl text-white shadow-xs',
+              isMiku ? 'bg-teal-500' : 'bg-orange-500'
+            )}
+          >
+            <History size={16} />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-900">
+              往日做题记录
+              <span className="rounded-full bg-teal-50 px-1.5 py-0.2 text-[10px] font-medium text-teal-700 ring-1 ring-teal-200/40">
+                历史足迹
+              </span>
+            </div>
+            <div className="text-[10px] text-zinc-400">系统性查看以往所有刷题明细、用时与攻克率</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-zinc-400 group-hover:text-teal-600 transition-colors">
+          <span className="text-[11px]">查看明细</span>
+          <ChevronRight size={13} />
+        </div>
       </section>
 
       <section>

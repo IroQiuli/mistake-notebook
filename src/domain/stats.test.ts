@@ -136,6 +136,25 @@ describe('chapterMastery', () => {
     expect(rows[0].retention).toBe(0);
     expect(rows[0].due).toBe(1);
   });
+
+  it('新题若设置了 mastery (1~4)，按对应等级先验计算保持率', () => {
+    const p1 = { ...problem('p1', 'c1'), mastery: 4 as const };
+    const p2 = { ...problem('p2', 'c1'), mastery: 3 as const };
+    const p3 = { ...problem('p3', 'c1'), mastery: 2 as const };
+    const p4 = { ...problem('p4', 'c1'), mastery: 1 as const };
+    const cards = [
+      card('p1', NOW, { state: 0, lastReview: undefined }),
+      card('p2', NOW, { state: 0, lastReview: undefined }),
+      card('p3', NOW, { state: 0, lastReview: undefined }),
+      card('p4', NOW, { state: 0, lastReview: undefined }),
+    ];
+    const rows = chapterMastery([p1, p2, p3, p4], cards, chapters, NOW);
+    const c1 = rows.find((r) => r.chapterId === 'c1')!;
+    expect(c1.total).toBe(4);
+    expect(c1.archived).toBe(1); // p1 (mastery 4) 计入已掌握
+    // 1 (p1) + 0.75 (p2) + 0.5 (p3) + 0.25 (p4) = 2.5 / 4 = 0.625
+    expect(c1.retention).toBeCloseTo(0.625, 5);
+  });
 });
 
 describe('overallRetention', () => {
