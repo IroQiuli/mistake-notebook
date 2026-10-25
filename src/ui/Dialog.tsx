@@ -8,11 +8,17 @@ interface DialogProps {
   children: ReactNode;
   footer?: ReactNode;
   /** 宽屏时最大宽度 */
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   className?: string;
 }
 
-const SIZES = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl' };
+const SIZES = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+  xl: 'max-w-5xl',
+  full: 'max-w-[96vw]',
+};
 
 export function Dialog({ open, onClose, title, children, footer, size = 'md', className }: DialogProps) {
   useEffect(() => {

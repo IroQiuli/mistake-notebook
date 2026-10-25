@@ -12,6 +12,7 @@ import {
   Maximize2,
   Timer,
   Trash2,
+  ZoomIn,
 } from 'lucide-react';
 import { db, getSetting } from '../../storage/db';
 import { clearActivePaper, loadActivePaper, type ActivePaper } from '../../storage/paper';
@@ -82,6 +83,7 @@ function ReviewBody({
   } = useSession(subjectId, paperIds);
 
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
+  const [fullscreenUrl, setFullscreenUrl] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [deleteAssetId, setDeleteAssetId] = useState<string | null>(null);
@@ -373,17 +375,37 @@ function ReviewBody({
       <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-100 p-2">
         {stemUrl ? (
           <div className="mx-auto w-full max-w-3xl">
-            <button
-              type="button"
-              onClick={() => setZoomUrl(stemUrl)}
-              className="relative block w-full overflow-hidden rounded-xl bg-white shadow-sm"
-            >
-              <img src={stemUrl} alt="题干" className="block h-auto w-full" />
-              <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/45 px-2 py-1 text-[10px] text-white">
-                <Maximize2 size={11} />
-                点开看大图
-              </span>
-            </button>
+            <div className="relative block w-full overflow-hidden rounded-xl bg-white shadow-sm">
+              <img
+                src={stemUrl}
+                alt="题干"
+                className="block h-auto w-full cursor-zoom-in"
+                onClick={() => setZoomUrl(stemUrl)}
+              />
+              <div className="absolute right-2 top-2 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFullscreenUrl(stemUrl);
+                  }}
+                  className="flex items-center gap-1 rounded-full bg-teal-600/95 hover:bg-teal-500 text-white px-2.5 py-1 text-[11px] font-medium shadow-md backdrop-blur transition-all active:scale-95 border border-white/20"
+                  title="以全屏无边界模式放大查看"
+                >
+                  <Maximize2 size={12} />
+                  全屏放大
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomUrl(stemUrl)}
+                  className="flex items-center gap-1 rounded-full bg-black/55 hover:bg-black/75 px-2 py-1 text-[10px] text-white backdrop-blur transition-colors"
+                  title="弹窗预览"
+                >
+                  <ZoomIn size={11} />
+                  弹窗
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="flex h-full items-center justify-center p-8 text-center text-sm text-zinc-400">
@@ -428,6 +450,18 @@ function ReviewBody({
                     aria-label={`放大答案 ${i + 1}`}
                   >
                     <img src={a.url} alt={`答案 ${i + 1}`} className="h-36 w-auto object-contain" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFullscreenUrl(a.url);
+                    }}
+                    className="absolute left-1 top-1 flex h-5 items-center gap-0.5 rounded-full bg-black/60 hover:bg-teal-600 px-1.5 text-[9px] text-white transition-colors shadow-sm backdrop-blur"
+                    title="全屏放大答案图"
+                  >
+                    <Maximize2 size={9} />
+                    全屏
                   </button>
                   <button
                     type="button"
@@ -541,11 +575,26 @@ function ReviewBody({
         )}
       </footer>
 
-      <Dialog open={zoomUrl !== null} onClose={() => setZoomUrl(null)} title="题目 / 答案" size="lg">
+      <Dialog open={zoomUrl !== null} onClose={() => setZoomUrl(null)} title="题目 / 答案" size="xl">
         {zoomUrl && (
-          <ZoomableImage src={zoomUrl} className="h-[70vh] w-full rounded-lg" alt="大图" />
+          <ZoomableImage
+            src={zoomUrl}
+            className="h-[76vh] w-full rounded-lg"
+            alt="大图"
+            title="题目 / 答案"
+          />
         )}
       </Dialog>
+
+      {/* 沉浸式真全屏放大模式（突破弹窗限制，100% 视口） */}
+      {fullscreenUrl && (
+        <ZoomableImage
+          src={fullscreenUrl}
+          initialFullscreen={true}
+          onClose={() => setFullscreenUrl(null)}
+          title="错题全屏沉浸查看"
+        />
+      )}
 
       {/* 编辑错因与心得备注弹窗 */}
       <Dialog

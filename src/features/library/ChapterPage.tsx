@@ -98,9 +98,12 @@ function SlideCard({
       </div>
 
       {zoom && url && (
-        <div className="fixed inset-0 z-50 bg-black/80 p-3" onClick={() => setZoom(false)}>
-          <ZoomableImage src={url} className="h-full w-full" alt="题目大图" />
-        </div>
+        <ZoomableImage
+          src={url}
+          initialFullscreen={true}
+          onClose={() => setZoom(false)}
+          title="错题大图查看"
+        />
       )}
     </article>
   );

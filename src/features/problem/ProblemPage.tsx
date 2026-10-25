@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Edit3,
   ImagePlus,
+  Maximize2,
   Minus,
   Plus,
   Trash2,
@@ -103,6 +104,7 @@ export default function ProblemPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
+  const [fullscreenUrl, setFullscreenUrl] = useState<string | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -255,13 +257,23 @@ export default function ProblemPage() {
             />
             <span className="truncate">权重 {weight} · {weightLabel(weight)}</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setZoomOpen(true)}
-            className="shrink-0 rounded px-1.5 py-1 text-[11px] text-zinc-400 active:bg-zinc-100"
-          >
-            放大看
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFullscreenUrl(stemUrl)}
+              className="flex items-center gap-1 rounded-md bg-teal-50 px-2 py-1 text-[11px] font-medium text-teal-700 hover:bg-teal-100 transition-colors"
+            >
+              <Maximize2 size={11} />
+              全屏看
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoomOpen(true)}
+              className="shrink-0 rounded px-1.5 py-1 text-[11px] text-zinc-400 active:bg-zinc-100"
+            >
+              弹窗看
+            </button>
+          </div>
         </div>
       </div>
 
@@ -388,6 +400,18 @@ export default function ProblemPage() {
                       className="h-28 w-auto object-cover"
                       loading="lazy"
                     />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFullscreenUrl(a.url);
+                    }}
+                    className="absolute left-1 top-1 flex h-5 items-center gap-0.5 rounded-full bg-black/60 hover:bg-teal-600 px-1.5 text-[9px] text-white transition-colors shadow-sm backdrop-blur"
+                    title="全屏放大答案图"
+                  >
+                    <Maximize2 size={9} />
+                    全屏
                   </button>
                   <button
                     type="button"
@@ -647,12 +671,13 @@ export default function ProblemPage() {
         </div>
       </Dialog>
 
-      <Dialog open={zoomAnswer !== null} onClose={() => setZoomAnswer(null)} title="答案" size="lg">
+      <Dialog open={zoomAnswer !== null} onClose={() => setZoomAnswer(null)} title="答案" size="xl">
         {zoomAnswer !== null && answerUrls[zoomAnswer] && (
           <ZoomableImage
             src={answerUrls[zoomAnswer].url}
-            className="h-[62vh] w-full rounded-lg"
+            className="h-[75vh] w-full rounded-lg"
             alt="答案大图"
+            title="参考答案"
           />
         )}
       </Dialog>
@@ -677,11 +702,26 @@ export default function ProblemPage() {
         </div>
       </Dialog>
 
-      <Dialog open={zoomOpen} onClose={() => setZoomOpen(false)} title="题干" size="lg">
+      <Dialog open={zoomOpen} onClose={() => setZoomOpen(false)} title="题干" size="xl">
         {stemUrl && (
-          <ZoomableImage src={stemUrl} className="h-[68vh] w-full rounded-lg" alt="题干大图" />
+          <ZoomableImage
+            src={stemUrl}
+            className="h-[75vh] w-full rounded-lg"
+            alt="题干大图"
+            title="题干大图"
+          />
         )}
       </Dialog>
+
+      {/* 沉浸式真全屏放大模式 */}
+      {fullscreenUrl && (
+        <ZoomableImage
+          src={fullscreenUrl}
+          initialFullscreen={true}
+          onClose={() => setFullscreenUrl(null)}
+          title="错题全屏沉浸查看"
+        />
+      )}
 
       {/* 快捷编辑错因与心得备注 */}
       <Dialog
