@@ -228,7 +228,7 @@ export default function TodayPage() {
             )}
           >
             {isMiku ? (
-              <MikuChibiCheer size={18} className="-my-1" />
+              <MikuChibiCheer size={22} className="-my-1" />
             ) : (
               <Flame size={13} className="text-orange-500" />
             )}
@@ -248,7 +248,7 @@ export default function TodayPage() {
       >
         <div className="flex items-center gap-2 font-medium text-zinc-800">
           {isMiku ? (
-            <MikuChibiSprint size={22} className="-my-1" />
+            <MikuChibiSprint size={24} className="-my-1" />
           ) : (
             <span
               className={cn(
@@ -330,7 +330,7 @@ export default function TodayPage() {
                       : 'bg-orange-50 text-orange-600 group-hover:bg-orange-100'
                   )}
                 >
-                  {isMiku ? <MikuChibiLeek size={16} className="-my-0.5" /> : <ListOrdered size={12} />}
+                  {isMiku ? <MikuChibiLeek size={20} className="-my-0.5" /> : <ListOrdered size={12} />}
                   待写清单
                 </span>
               )}
@@ -364,7 +364,7 @@ export default function TodayPage() {
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5 text-center shadow-xs">
             {isMiku && (
               <div className="mb-2 flex justify-center">
-                <MikuChibiCelebrate size={56} className="drop-shadow-xs animate-pulse" />
+                <MikuChibiCelebrate size={72} className="drop-shadow-xs animate-pulse" />
               </div>
             )}
             <div className="text-sm font-bold text-emerald-800">

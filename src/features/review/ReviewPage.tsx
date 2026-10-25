@@ -49,10 +49,10 @@ const RATING_STYLE: Record<Rating, string> = {
 };
 
 const CHIBI_RATING_ICONS: Record<Rating, React.ReactNode> = {
-  1: <MikuChibiDizzy size={26} className="mb-0.5" />,
-  2: <MikuChibiThinking size={26} className="mb-0.5" />,
-  3: <MikuChibiThumbsUp size={26} className="mb-0.5" />,
-  4: <MikuChibiSparkle size={26} className="mb-0.5" />,
+  1: <MikuChibiDizzy size={28} className="mb-0.5" />,
+  2: <MikuChibiThinking size={28} className="mb-0.5" />,
+  3: <MikuChibiThumbsUp size={28} className="mb-0.5" />,
+  4: <MikuChibiSparkle size={28} className="mb-0.5" />,
 };
 
 function ReviewBody({
@@ -219,7 +219,7 @@ function ReviewBody({
           {isMiku ? (
             <div className="relative mx-auto mb-3 flex justify-center">
               <div className="absolute inset-0 -m-4 rounded-full bg-teal-400/20 blur-xl pointer-events-none" />
-              <MikuChibiCelebrate size={88} className="relative drop-shadow-md animate-bounce" />
+              <MikuChibiCelebrate size={110} className="relative drop-shadow-md animate-bounce" />
             </div>
           ) : (
             <div className="text-4xl">🎉</div>

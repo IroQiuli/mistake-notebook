@@ -33,6 +33,7 @@ import {
   MikuSettingsIcon,
   MikuStatsIcon,
 } from './ui/MikuIcons';
+import { MikuChibiLeek } from './ui/MikuChibi';
 import { resolveThemeUrl } from './lib/themeUrl';
 
 const NAV = [
@@ -256,11 +257,14 @@ function Shell() {
         </nav>
         <div className="mt-auto px-3 text-[11px] leading-relaxed text-zinc-400">
           {isMiku ? (
-            <>
-              <span className="text-teal-600/90 font-medium">🎵 与 Miku 一起备战</span>
-              <br />
-              数据保存在本机浏览器
-            </>
+            <div className="flex items-center gap-2">
+              <MikuChibiLeek size={28} className="shrink-0" />
+              <div>
+                <span className="text-teal-600/90 font-medium">🎵 与 Miku 一起备战</span>
+                <br />
+                数据保存在本机浏览器
+              </div>
+            </div>
           ) : (
             <>
               数据保存在本机浏览器
