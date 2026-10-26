@@ -24,7 +24,7 @@ import {
 } from '../../storage/problems';
 import { putAsset, getUrl } from '../../storage/assets';
 import { applyRating } from '../../domain/scheduler';
-import { formatDateTime, formatDue } from '../../domain/time';
+import { formatDateTime, formatDue, formatDuration } from '../../domain/time';
 import { RATING_LABEL } from '../../domain/types';
 import { MASTERY_LEVELS, masteryLevel, masteryTextColor } from '../../domain/taxonomy';
 import { weightLabel, weightOf } from '../../domain/weight';
@@ -542,7 +542,12 @@ export default function ProblemPage() {
             <ul className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 bg-white">
               {shownLogs.map((log) => (
                 <li key={log.id} className="flex items-center justify-between px-4 py-2.5 text-xs">
-                  <span className="text-zinc-500">{formatDateTime(log.reviewedAt)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-600">{formatDateTime(log.reviewedAt)}</span>
+                    <span className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] tabular-nums text-zinc-500">
+                      用时 {log.durationMs > 0 ? formatDuration(log.durationMs) : '秒答'}
+                    </span>
+                  </div>
                   <span
                     className={cn(
                       'rounded-full px-2 py-0.5 text-[11px]',

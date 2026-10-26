@@ -89,11 +89,13 @@ export function useSession(subjectId?: string, paperIds?: string[] | null) {
   }, [subjectId, paperIds]);
 
   const current = queue?.[index];
-  const finished = queue !== null && index >= queue.length;
+  const finished =
+    queue !== null &&
+    ((queue.length === 0 && stats.length > 0) || (queue.length > 0 && index >= queue.length));
 
   const reveal = useCallback(() => {
     setRevealed(true);
-    setShownAt(Date.now());
+    // 不重置 shownAt，保留从题目呈现开始累计的真实做题耗时
   }, []);
 
   /** 上一题 / 下一题：只移动指针，不改任何数据 */
@@ -102,7 +104,7 @@ export function useSession(subjectId?: string, paperIds?: string[] | null) {
       setIndex((i) => {
         const next = i + delta;
         if (!queue || next < 0) return i;
-        return Math.min(queue.length, next);
+        return Math.min(Math.max(0, queue.length - 1), next);
       });
       setRevealed(false);
       setShownAt(Date.now());
@@ -117,7 +119,7 @@ export function useSession(subjectId?: string, paperIds?: string[] | null) {
       const weight = weightOf(current.problem);
       const result = applyRating(current.card, rating, now, weight);
       const nextWeight = adjustWeight(weight, rating);
-      const durationMs = now - shownAt;
+      const durationMs = Math.max(1000, now - shownAt);
 
       await db.transaction('rw', db.cards, db.reviewLogs, db.problems, async () => {
         await db.cards.put(result.card);
@@ -137,10 +139,24 @@ export function useSession(subjectId?: string, paperIds?: string[] | null) {
 
       setStats((prev) => [...prev, { rating, ms: durationMs }]);
       setRevealed(false);
-      setIndex((i) => i + 1);
+
+      // 本轮做题中，点击四档按钮中任意一个即在本次做题界面立即移除该题
+      setQueue((prev) => {
+        if (!prev) return null;
+        return prev.filter((_, idx) => idx !== index);
+      });
+
+      // 若处于队列末尾，自适应收缩指针
+      setIndex((i) => {
+        if (!queue) return 0;
+        const nextLen = queue.length - 1;
+        if (nextLen <= 0) return 0;
+        return Math.min(i, nextLen - 1);
+      });
+
       setShownAt(Date.now());
     },
-    [current, shownAt]
+    [current, shownAt, queue, index]
   );
 
   /** 复习中即时修改或清空错因备注 */

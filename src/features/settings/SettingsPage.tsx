@@ -14,9 +14,11 @@ import {
   Sliders,
   Sparkles,
   Upload,
+  Zap,
+  Share2,
 } from 'lucide-react';
-import { db, getSetting, setSetting } from '../../storage/db';
-import { backupFilename, downloadBlob, exportBackup, importBackup } from '../../storage/backup';
+import { db, getSetting, getSettingSync, setSetting } from '../../storage/db';
+import { backupFilename, exportBackup, importBackup, saveOrShareBackup } from '../../storage/backup';
 import {
   BackupCryptoError,
   decryptBackup,
@@ -63,6 +65,9 @@ export default function SettingsPage() {
   const [exportPwd, setExportPwd] = useState('');
   const [exportPwd2, setExportPwd2] = useState('');
   const [encryptOn, setEncryptOn] = useState(true);
+  const [exportMode, setExportMode] = useState<'snapshot' | 'full'>('snapshot');
+  const [singleLatestFile, setSingleLatestFile] = useState(false);
+  const [canShare, setCanShare] = useState(false);
   const [goalInput, setGoalInput] = useState('20');
   const [usage, setUsage] = useState<{ usage: number; quota: number }>({ usage: 0, quota: 0 });
   const [persist, setPersist] = useState<PersistState>('unsupported');
@@ -78,10 +83,10 @@ export default function SettingsPage() {
   const problems = useLiveQuery(() => db.problems.count(), [], 0);
   const assets = useLiveQuery(() => db.assets.count(), [], 0);
   const lastBackupAt = useLiveQuery(() => getSetting<number>('lastBackupAt', 0), [], 0);
-  const theme = useLiveQuery(() => getSetting<string>('theme', 'miku'), [], 'miku');
-  const wallpaper = useLiveQuery(() => getSetting<string>('wallpaper', ''), [], '');
-  const wallpaperBlur = useLiveQuery(() => getSetting<number>('wallpaperBlur', 0), [], 0);
-  const wallpaperMask = useLiveQuery(() => getSetting<number>('wallpaperMask', 0.08), [], 0.08);
+  const theme = useLiveQuery(() => getSetting<string>('theme', 'miku'), [], getSettingSync('theme', 'miku'));
+  const wallpaper = useLiveQuery(() => getSetting<string>('wallpaper', ''), [], getSettingSync('wallpaper', ''));
+  const wallpaperBlur = useLiveQuery(() => getSetting<number>('wallpaperBlur', 0), [], getSettingSync('wallpaperBlur', 0));
+  const wallpaperMask = useLiveQuery(() => getSetting<number>('wallpaperMask', 0.08), [], getSettingSync('wallpaperMask', 0.08));
   const [onlineUrl, setOnlineUrl] = useState('');
   const wallRef = useRef<HTMLInputElement>(null);
 
@@ -105,16 +110,22 @@ export default function SettingsPage() {
         setQuotaDraft(draft);
       })
       .catch(() => {});
+
+    if (typeof navigator !== 'undefined' && 'share' in navigator) {
+      setCanShare(true);
+    }
   }, []);
 
   const openExport = () => {
     setExportPwd('');
     setExportPwd2('');
     setEncryptOn(true);
+    setExportMode('snapshot');
+    setSingleLatestFile(false);
     setExportOpen(true);
   };
 
-  const doExport = async () => {
+  const doExport = async (target: 'picker' | 'share' | 'download' = 'picker') => {
     if (encryptOn) {
       if (exportPwd.length < 6) {
         toast.show('密码至少 6 位', 'error');
@@ -127,19 +138,34 @@ export default function SettingsPage() {
     }
     setBusy(true);
     try {
-      const zip = await exportBackup();
+      const isSnapshot = exportMode === 'snapshot';
+      const zip = await exportBackup({ includeAssets: !isSnapshot });
       const blob = encryptOn ? await encryptBackup(zip, exportPwd) : zip;
-      downloadBlob(blob, backupFilename(Date.now(), encryptOn));
-      toast.show(
-        encryptOn ? '加密备份已生成，请连同密码一起保存' : '备份已生成，请保存到网盘',
-        'success'
-      );
-      setExportOpen(false);
+      const filename = backupFilename(Date.now(), encryptOn, {
+        snapshot: isSnapshot,
+        singleLatest: singleLatestFile,
+      });
+      const res = await saveOrShareBackup(blob, filename, target);
+      if (res === 'cancelled') {
+        toast.show('已取消保存', 'info');
+      } else if (res === 'shared') {
+        toast.show('已调起系统分享，请存储到云盘或发送', 'success');
+        setExportOpen(false);
+      } else {
+        toast.show(
+          encryptOn
+            ? `${isSnapshot ? '轻量快照' : '完整备份'}已保存（含密码保护）`
+            : `${isSnapshot ? '轻量快照' : '全量备份'}已生成`,
+          'success'
+        );
+        setExportOpen(false);
+      }
       refreshUsage();
     } catch (err) {
       console.error(err);
       toast.show('导出失败：' + (err instanceof Error ? err.message : '未知错误'), 'error');
-    } finally {      setBusy(false);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -322,6 +348,19 @@ export default function SettingsPage() {
             ? '浏览器已承诺不主动清理本站数据。'
             : '建议申请持久化存储，并定期导出加密备份放网盘。'}
         </p>
+
+        <div className="mt-3 rounded-xl border border-teal-200/60 bg-teal-50/50 p-2.5 text-[11px] text-teal-950 leading-relaxed">
+          <div className="font-semibold text-teal-900 flex items-center gap-1">
+            <Sparkles size={13} className="text-teal-600" />
+            备份空间优化与防丢指南
+          </div>
+          <p className="mt-1">
+            • <b>日常高频备份</b>：选择「轻量快照（&lt;100KB）」，秒级生成且不占本地存储，随时可恢复全部做题记录、用时与排期。
+          </p>
+          <p className="mt-0.5">
+            • <b>避免副本堆积</b>：电脑端保存时直接选中旧备份文件覆盖；平板端可点击「分享」直接存入网盘或 iCloud 云盘，不占机身空间。
+          </p>
+        </div>
       </Section>
 
       <Section title="外观与主题 (初音未来 4K Demo)">
@@ -816,51 +855,137 @@ export default function SettingsPage() {
       </Section>
 
       <Dialog open={exportOpen} onClose={() => setExportOpen(false)} title="导出备份" size="sm">
-        <label className="flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2.5">
-          <span className="flex items-center gap-2 text-sm text-zinc-700">
-            <Lock size={15} className="text-zinc-400" />
+        {/* 模式选择 */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-zinc-700">备份类型</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setExportMode('snapshot')}
+              className={cn(
+                'flex flex-col items-start rounded-xl border p-2.5 text-left transition-all',
+                exportMode === 'snapshot'
+                  ? 'border-teal-500 bg-teal-50/70 ring-1 ring-teal-500/50'
+                  : 'border-zinc-200 bg-white hover:bg-zinc-50'
+              )}
+            >
+              <div className="flex items-center gap-1.5 font-semibold text-xs text-zinc-900">
+                <Zap size={14} className="text-teal-600" />
+                轻量数据快照
+              </div>
+              <span className="mt-1 text-[11px] leading-tight text-zinc-500">
+                &lt;100KB。存100次也不占存储，随时可恢复做题记录与排期。
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setExportMode('full')}
+              className={cn(
+                'flex flex-col items-start rounded-xl border p-2.5 text-left transition-all',
+                exportMode === 'full'
+                  ? 'border-teal-500 bg-teal-50/70 ring-1 ring-teal-500/50'
+                  : 'border-zinc-200 bg-white hover:bg-zinc-50'
+              )}
+            >
+              <div className="flex items-center gap-1.5 font-semibold text-xs text-zinc-900">
+                <HardDrive size={14} className="text-zinc-600" />
+                全量完整备份
+              </div>
+              <span className="mt-1 text-[11px] leading-tight text-zinc-500">
+                包含所有高清图片二进制，用于换新设备迁移或重大归档。
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* 固定文件名覆盖选项 */}
+        <label className="mt-3 flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2">
+          <div>
+            <div className="text-xs font-medium text-zinc-700">固定为 latest 命名 (便于覆盖)</div>
+            <div className="text-[10px] text-zinc-400">选择旧备份覆盖，防止生成 (1)(2) 冗余副本</div>
+          </div>
+          <input
+            type="checkbox"
+            checked={singleLatestFile}
+            onChange={(e) => setSingleLatestFile(e.target.checked)}
+            className="h-4 w-4 accent-teal-600"
+          />
+        </label>
+
+        {/* 加密选项 */}
+        <label className="mt-2 flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2">
+          <span className="flex items-center gap-2 text-xs font-medium text-zinc-700">
+            <Lock size={14} className="text-zinc-400" />
             用密码加密（推荐）
           </span>
           <input
             type="checkbox"
             checked={encryptOn}
             onChange={(e) => setEncryptOn(e.target.checked)}
-            className="h-5 w-5 accent-orange-500"
+            className="h-4 w-4 accent-teal-600"
           />
         </label>
 
         {encryptOn ? (
-          <div className="mt-3 space-y-2">
+          <div className="mt-2.5 space-y-2">
             <input
               type="password"
               value={exportPwd}
               onChange={(e) => setExportPwd(e.target.value)}
               placeholder="设置密码（至少 6 位）"
-              className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:border-orange-300"
+              className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:border-teal-400"
             />
             <input
               type="password"
               value={exportPwd2}
               onChange={(e) => setExportPwd2(e.target.value)}
               placeholder="再输一次"
-              className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:border-orange-300"
+              className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:border-teal-400"
             />
             <p className="text-[11px] leading-relaxed text-amber-700">
-              密码不会保存在任何地方。忘记密码 = 备份无法恢复，请记在密码管理器里。
+              密码不会保存在任何地方。忘记密码 = 备份无法恢复，请妥善保存。
             </p>
           </div>
         ) : (
-          <p className="mt-3 text-[11px] leading-relaxed text-amber-700">
-            不加密的备份是公开的压缩包，谁拿到都能看图。只建议临时在同设备间搬运。
+          <p className="mt-2 text-[11px] leading-relaxed text-amber-700">
+            不加密的备份为常规 zip 压缩包。
           </p>
         )}
 
-        <div className="mt-5 flex gap-3">
-          <Button block onClick={() => setExportOpen(false)} disabled={busy}>
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="primary"
+              onClick={() => void doExport('picker')}
+              disabled={busy}
+              className="flex items-center justify-center gap-1.5"
+            >
+              <Download size={14} />
+              {busy ? '生成中…' : '覆盖/保存到本地'}
+            </Button>
+            {canShare ? (
+              <Button
+                onClick={() => void doExport('share')}
+                disabled={busy}
+                className="flex items-center justify-center gap-1.5"
+              >
+                <Share2 size={14} />
+                分享至网盘/云端
+              </Button>
+            ) : (
+              <Button
+                onClick={() => void doExport('download')}
+                disabled={busy}
+                className="flex items-center justify-center gap-1.5"
+              >
+                <Download size={14} />
+                直接常规下载
+              </Button>
+            )}
+          </div>
+          <Button block onClick={() => setExportOpen(false)} disabled={busy} className="text-xs">
             取消
-          </Button>
-          <Button variant="primary" block onClick={() => void doExport()} disabled={busy}>
-            {busy ? '生成中…' : '生成备份'}
           </Button>
         </div>
       </Dialog>

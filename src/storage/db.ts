@@ -48,11 +48,38 @@ export class AppDb extends Dexie {
 
 export const db = new AppDb();
 
+const SETTING_CACHE_PREFIX = 'setting_cache:';
+
+export function getSettingSync<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(SETTING_CACHE_PREFIX + key);
+    if (raw !== null) {
+      return JSON.parse(raw) as T;
+    }
+  } catch {
+    /* 忽略隐私模式或解析失败 */
+  }
+  return fallback;
+}
+
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
   const row = await db.settings.get(key);
-  return row ? (row.value as T) : fallback;
+  if (row) {
+    try {
+      localStorage.setItem(SETTING_CACHE_PREFIX + key, JSON.stringify(row.value));
+    } catch {
+      /* 忽略 */
+    }
+    return row.value as T;
+  }
+  return fallback;
 }
 
 export async function setSetting(key: string, value: unknown): Promise<void> {
+  try {
+    localStorage.setItem(SETTING_CACHE_PREFIX + key, JSON.stringify(value));
+  } catch {
+    /* 忽略 */
+  }
   await db.settings.put({ key, value });
 }

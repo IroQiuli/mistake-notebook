@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useGo } from '../../hooks/useBack';
 import { ChevronRight, History } from 'lucide-react';
 import { db } from '../../storage/db';
-import { dayKey, formatDateTime, learningDayStart } from '../../domain/time';
+import { dayKey, formatDateTime, formatDuration, learningDayStart } from '../../domain/time';
 import { displayTitle } from '../../domain/title';
 import { RATING_LABEL, type Rating, type ReviewLog } from '../../domain/types';
 import { Dialog } from '../../ui/Dialog';
@@ -141,6 +141,7 @@ export function DetailDialog({
                           </span>
                           <span className="block truncate text-[10px] text-zinc-400">
                             {formatDateTime(l.reviewedAt).slice(5)}
+                            {l.durationMs > 0 ? ` · 用时 ${formatDuration(l.durationMs)}` : ''}
                             {p?.wrongNote ? ` · ${p.wrongNote}` : ''}
                           </span>
                         </span>

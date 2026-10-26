@@ -456,9 +456,9 @@ export default function StatsPage() {
         </p>
       </header>
 
-      <div className="sticky top-0 z-20 -mx-4 bg-zinc-50/95 px-4 py-2 backdrop-blur">
+      <div className="sticky top-0 z-20 -mx-4 px-4 py-2 backdrop-blur-md bg-white/10">
         <div
-          className="grid gap-1 rounded-xl bg-zinc-100 p-1"
+          className="grid gap-1 rounded-2xl border border-teal-200/50 bg-white/45 backdrop-blur-md p-1.5 shadow-xs ring-1 ring-white/60"
           style={{ gridTemplateColumns: `repeat(${VIEWS.length}, minmax(0, 1fr))` }}
         >
           {VIEWS.map((v) => (
@@ -468,8 +468,10 @@ export default function StatsPage() {
               data-testid={`stats-view-${v.key}`}
               onClick={() => changeView(v.key)}
               className={cn(
-                'rounded-lg py-1.5 text-xs font-medium transition-colors',
-                view === v.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
+                'rounded-xl py-1.5 text-xs font-semibold transition-all',
+                view === v.key
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'text-zinc-800 hover:bg-white/40 active:bg-white/60'
               )}
             >
               {v.label}
@@ -492,10 +494,10 @@ export default function StatsPage() {
             ].map((s) => (
               <div
                 key={s.label}
-                className="rounded-xl border border-zinc-200 bg-white px-2 py-2.5"
+                className="rounded-2xl border border-white/60 bg-white/45 backdrop-blur-md px-2 py-2.5 shadow-xs"
               >
-                <div className="text-base font-semibold tabular-nums text-zinc-900">{s.value}</div>
-                <div className="mt-0.5 text-[10px] leading-tight text-zinc-500">{s.label}</div>
+                <div className="text-base font-bold tabular-nums text-zinc-900 drop-shadow-xs">{s.value}</div>
+                <div className="mt-0.5 text-[10px] font-medium leading-tight text-zinc-700">{s.label}</div>
               </div>
             ))}
           </section>

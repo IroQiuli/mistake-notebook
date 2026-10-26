@@ -100,4 +100,24 @@ describe('备份回路', () => {
     expect(result.missingAssets).toBe(0);
     expect((await db.problems.get('p2'))!.missingAsset).toBe(1);
   });
+
+  it('轻量数据快照模式不打包图片，但导入后本地已有图片能正确关联', async () => {
+    await addProblemWithImage();
+    const fullZip = await exportBackup();
+    const snapshotZip = await exportBackup({ includeAssets: false });
+
+    // 快照体积应小于全量备份
+    expect(snapshotZip.size).toBeLessThan(fullZip.size);
+
+    // 修改本地题目笔记
+    await db.problems.update('p1', { wrongNote: '本地修改' });
+    expect((await db.problems.get('p1'))!.wrongNote).toBe('本地修改');
+
+    // 导入轻量快照
+    const result = await importBackup(snapshotZip);
+    expect(result.problems).toBe(1);
+    expect(result.missingAssets).toBe(0); // 本地已有图片，不应报缺图
+    expect((await db.problems.get('p1'))!.wrongNote).toBe('x');
+    expect((await db.problems.get('p1'))!.missingAsset).toBeUndefined();
+  });
 });

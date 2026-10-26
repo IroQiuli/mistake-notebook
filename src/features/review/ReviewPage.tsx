@@ -74,6 +74,7 @@ function ReviewBody({
     current,
     revealed,
     finished,
+    stats,
     summary,
     reveal,
     rate,
@@ -309,9 +310,9 @@ function ReviewBody({
           </button>
           <div className="min-w-0 text-center">
             <div className="text-xs font-medium text-zinc-700">
-              第 {index + 1} 题
+              第 {stats.length + 1} 题
               <span className="ml-1 text-[11px] font-normal text-zinc-400">
-                (剩余 {Math.max(0, queue.length - index - 1)} 题)
+                (已写 {stats.length} 题 · 剩余 {queue.length} 题)
               </span>
               {paper && <span className="ml-1 text-[10px] font-semibold text-orange-500">套卷</span>}
             </div>

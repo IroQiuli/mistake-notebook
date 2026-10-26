@@ -11,7 +11,7 @@ import {
 import { BarChart3, CalendarDays, History, Layers, Plus, Settings } from 'lucide-react';
 import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { getSetting } from './storage/db';
+import { getSetting, getSettingSync } from './storage/db';
 import { ToastProvider, useToast } from './ui/Toast';
 import { cn } from './ui/cn';
 import { ensureSeeded } from './storage/seed';
@@ -146,10 +146,22 @@ function Shell() {
   const location = useLocation();
   const isImmersive =
     location.pathname.startsWith('/review') || location.pathname.startsWith('/chapter');
-  const theme = useLiveQuery(() => getSetting<string>('theme', 'miku'), [], 'miku');
-  const wallpaperSetting = useLiveQuery(() => getSetting<string>('wallpaper', ''), [], '');
-  const wallpaperBlur = useLiveQuery(() => getSetting<number>('wallpaperBlur', 0), [], 0);
-  const wallpaperMask = useLiveQuery(() => getSetting<number>('wallpaperMask', 0.08), [], 0.08);
+  const theme = useLiveQuery(() => getSetting<string>('theme', 'miku'), [], getSettingSync('theme', 'miku'));
+  const wallpaperSetting = useLiveQuery(
+    () => getSetting<string>('wallpaper', ''),
+    [],
+    getSettingSync('wallpaper', '')
+  );
+  const wallpaperBlur = useLiveQuery(
+    () => getSetting<number>('wallpaperBlur', 0),
+    [],
+    getSettingSync('wallpaperBlur', 0)
+  );
+  const wallpaperMask = useLiveQuery(
+    () => getSetting<number>('wallpaperMask', 0.08),
+    [],
+    getSettingSync('wallpaperMask', 0.08)
+  );
 
   const isMiku = theme === 'miku';
   // Miku 主题下若未设置壁纸，默认使用精选 4K 星空壁纸

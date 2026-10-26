@@ -11,7 +11,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['apple-touch-icon.png'],
+      includeAssets: ['apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'favicon.svg'],
       manifest: {
         name: '初音未来 · 考研错题簿',
         short_name: '初音错题簿',
