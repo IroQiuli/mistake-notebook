@@ -1,7 +1,7 @@
 import { healCards } from '../domain/heal';
 
-export const APP_VERSION = 'v0.8.3 · 初音未来版';
-export const APP_BUILD_TIME = '2026-10-26 23:45';
+export const APP_VERSION = 'v0.8.4 · 初音未来版 (天选姬动态桌宠)';
+export const APP_BUILD_TIME = '2026-10-27 00:00';
 export const PERMANENT_MEDIA_CACHE = 'miku-wallpaper-cache-v1';
 
 /**

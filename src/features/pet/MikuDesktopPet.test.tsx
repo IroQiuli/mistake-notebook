@@ -50,4 +50,46 @@ describe('MikuDesktopPet 组件测试', () => {
 
     expect(container.firstChild).toBeNull();
   });
+
+  it('默认采用动态小人模式 (Shimeji) 渲染动态图像', () => {
+    render(
+      <MemoryRouter>
+        <MikuDesktopPet />
+      </MemoryRouter>
+    );
+
+    const img = screen.getByAltText('初音未来动态桌宠');
+    expect(img).toBeInTheDocument();
+    expect(img.getAttribute('src')).toContain('themes/miku/shimeji');
+  });
+
+  it('切换为高清立绘模式时渲染矢量立绘', async () => {
+    await setSetting('petStyle', 'chibi');
+    render(
+      <MemoryRouter>
+        <MikuDesktopPet />
+      </MemoryRouter>
+    );
+
+    const pet = screen.getByLabelText('初音未来伴学桌宠');
+    expect(pet).toBeInTheDocument();
+    expect(screen.queryByAltText('初音未来动态桌宠')).toBeNull();
+  });
+
+  it('拖拽移动时切换为扑腾悬空状态', () => {
+    render(
+      <MemoryRouter>
+        <MikuDesktopPet />
+      </MemoryRouter>
+    );
+
+    const pet = screen.getByLabelText('初音未来伴学桌宠');
+    fireEvent.pointerDown(pet, { clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(pet, { clientX: 130, clientY: 140, pointerId: 1 });
+
+    const img = screen.getByAltText('初音未来动态桌宠');
+    expect(img).toBeInTheDocument();
+    // 拖拽悬空扑腾帧
+    expect(img.getAttribute('src')).toMatch(/shime5|shime6|shime7/);
+  });
 });

@@ -8,8 +8,11 @@ import {
   type PetPose,
 } from './petQuotes';
 import { learningDayStart } from '../../domain/time';
+import type { ShimejiAction } from './shimejiAnimations';
 
 const STORAGE_KEY_POS = 'miku_pet_pos';
+
+export type PetStyle = 'animated' | 'chibi';
 
 export interface PetPosition {
   x: number;
@@ -32,6 +35,12 @@ export function usePetState() {
     getSettingSync('petSize', 64)
   );
 
+  const petStyle = useLiveQuery(
+    () => getSetting<PetStyle>('petStyle', 'animated'),
+    [],
+    getSettingSync('petStyle', 'animated')
+  );
+
   const [minimized, setMinimized] = useState(() => {
     try {
       return localStorage.getItem('miku_pet_minimized') === 'true';
@@ -51,12 +60,15 @@ export function usePetState() {
   });
 
   const [pose, setPose] = useState<PetPose>('leek');
+  const [shimejiAction, setShimejiAction] = useState<ShimejiAction>('idle_sit');
   const [bubbleText, setBubbleText] = useState<string | null>(null);
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [isJelly, setIsJelly] = useState(false);
 
   const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jellyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const actionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 监听多窗口/设置页位置复位
   useEffect(() => {
@@ -118,11 +130,77 @@ export function usePetState() {
     if (jellyTimerRef.current) clearTimeout(jellyTimerRef.current);
     jellyTimerRef.current = setTimeout(() => setIsJelly(false), 600);
 
+    // 触发动态小人欢呼比耶动效
+    setShimejiAction('cheer');
+    if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+    actionTimerRef.current = setTimeout(() => {
+      setShimejiAction('idle_sit');
+    }, 900);
+
     // 随机获取台词与动作
     const quote = getRandomPokeQuote(bubbleText ?? undefined);
     setPose(quote.pose);
     showBubble(quote.text);
   }, [bubbleText, showBubble]);
+
+  // 抓起与拖拽交互状态转换
+  const startDragAction = useCallback(() => {
+    if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+    setShimejiAction('drag_dangle');
+  }, []);
+
+  const endDragAction = useCallback(() => {
+    setShimejiAction('land');
+    if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+    actionTimerRef.current = setTimeout(() => {
+      setShimejiAction('idle_sit');
+    }, 420);
+  }, []);
+
+  const handleActionComplete = useCallback(() => {
+    setShimejiAction((prev) => {
+      if (prev === 'land' || prev === 'cheer') {
+        return 'idle_sit';
+      }
+      return prev;
+    });
+  }, []);
+
+  // 待机自动随机动画分支（每隔 18~28 秒随机甩葱舞或打瞌睡）
+  useEffect(() => {
+    if (minimized || !petEnabled || petStyle !== 'animated') return;
+
+    const scheduleNextIdle = () => {
+      const delay = Math.random() * 10000 + 18000;
+      return setTimeout(() => {
+        setShimejiAction((curr) => {
+          if (curr === 'idle_sit') {
+            const hour = new Date().getHours();
+            const candidate: ShimejiAction =
+              (hour >= 23 || hour < 6) && Math.random() < 0.6
+                ? 'sleep'
+                : 'leek_spin';
+
+            const duration = candidate === 'sleep' ? 5000 : 3200;
+            if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+            actionTimerRef.current = setTimeout(() => {
+              setShimejiAction('idle_sit');
+            }, duration);
+
+            return candidate;
+          }
+          return curr;
+        });
+        idleTimerRef.current = scheduleNextIdle();
+      }, delay);
+    };
+
+    idleTimerRef.current = scheduleNextIdle();
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+    };
+  }, [minimized, petEnabled, petStyle]);
 
   const toggleMinimized = useCallback(() => {
     setMinimized((prev) => {
@@ -158,7 +236,9 @@ export function usePetState() {
     isMiku,
     enabled: petEnabled,
     size: petSize,
+    style: petStyle,
     pose,
+    shimejiAction,
     minimized,
     position,
     bubbleText,
@@ -170,7 +250,11 @@ export function usePetState() {
     toggleMinimized,
     updatePosition,
     resetPosition,
+    startDragAction,
+    endDragAction,
+    handleActionComplete,
     setPetEnabled: (val: boolean) => setSetting('petEnabled', val),
     setPetSize: (val: number) => setSetting('petSize', val),
+    setPetStyle: (val: PetStyle) => setSetting('petStyle', val),
   };
 }

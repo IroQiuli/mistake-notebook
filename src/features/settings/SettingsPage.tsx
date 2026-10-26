@@ -91,6 +91,11 @@ export default function SettingsPage() {
   const wallpaperMask = useLiveQuery(() => getSetting<number>('wallpaperMask', 0.08), [], getSettingSync('wallpaperMask', 0.08));
   const petEnabled = useLiveQuery(() => getSetting<boolean>('petEnabled', true), [], getSettingSync('petEnabled', true));
   const petSize = useLiveQuery(() => getSetting<number>('petSize', 64), [], getSettingSync('petSize', 64));
+  const petStyle = useLiveQuery(
+    () => getSetting<'animated' | 'chibi'>('petStyle', 'animated'),
+    [],
+    getSettingSync('petStyle', 'animated')
+  );
   const [onlineUrl, setOnlineUrl] = useState('');
   const wallRef = useRef<HTMLInputElement>(null);
 
@@ -704,7 +709,40 @@ export default function SettingsPage() {
 
           {petEnabled && (
             <div className="rounded-xl bg-zinc-50 p-2.5 space-y-2.5">
-              <div className="flex items-center justify-between">
+              {/* 桌宠形象风格选择 */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-medium text-zinc-700">桌宠形象风格</span>
+                  <p className="text-[10px] text-zinc-400">
+                    动态小人版支持屏幕晃腿、空中扑腾、落地缓冲、欢呼跳跃等动态动作
+                  </p>
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  {[
+                    { label: '🌟 动态小人', val: 'animated' },
+                    { label: '🎨 高清立绘', val: 'chibi' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={async () => {
+                        await setSetting('petStyle', opt.val);
+                        toast.show(`已切换为${opt.label}`, 'info');
+                      }}
+                      className={cn(
+                        'rounded-lg px-2.5 py-1 text-xs font-medium transition-all',
+                        (petStyle || 'animated') === opt.val
+                          ? 'bg-teal-600 text-white shadow-xs'
+                          : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-100'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-zinc-200/50">
                 <span className="text-xs text-zinc-600">桌宠显示大小</span>
                 <div className="flex gap-1.5">
                   {[

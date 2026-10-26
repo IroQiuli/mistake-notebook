@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Minus, RotateCcw, Sparkles, X } from 'lucide-react';
 import { usePetState } from './usePetState';
+import { ShimejiRenderer } from './ShimejiRenderer';
 import {
   MikuChibiCelebrate,
   MikuChibiLeek,
@@ -17,7 +18,9 @@ export function MikuDesktopPet() {
     isMiku,
     enabled,
     size,
+    style,
     pose,
+    shimejiAction,
     minimized,
     position,
     bubbleText,
@@ -28,6 +31,9 @@ export function MikuDesktopPet() {
     toggleMinimized,
     updatePosition,
     resetPosition,
+    startDragAction,
+    endDragAction,
+    handleActionComplete,
   } = usePetState();
 
   const location = useLocation();
@@ -79,6 +85,7 @@ export function MikuDesktopPet() {
       dragStartRef.current.moved = true;
       setDragging(true);
       hideBubble();
+      startDragAction();
     }
 
     if (dragStartRef.current.moved) {
@@ -102,18 +109,30 @@ export function MikuDesktopPet() {
       /* ignore */
     }
 
-    // 若未发生明显移动，判定为点击戳一戳
+    // 若未发生明显移动，判定为点击戳一戳；若移动则执行落地动作
     if (!moved) {
       if (minimized) {
         toggleMinimized();
       } else {
         poke();
       }
+    } else {
+      endDragAction();
     }
   };
 
   // 姿态映射
   const renderAvatar = () => {
+    if (style === 'animated') {
+      return (
+        <ShimejiRenderer
+          action={shimejiAction}
+          size={Math.round(size * 1.15)}
+          onActionComplete={handleActionComplete}
+        />
+      );
+    }
+
     const avatarProps = {
       size: size,
       className: 'transition-transform duration-200 select-none pointer-events-none drop-shadow-md',
@@ -226,21 +245,22 @@ export function MikuDesktopPet() {
             </div>
           )}
 
-          {/* 初音立绘本体与呼吸浮动动效 */}
+          {/* 初音立绘/动态小人本体与动效 */}
           <div
             className={cn(
               'relative flex flex-col items-center justify-center transition-transform duration-200',
-              !dragging && 'animate-pet-float',
+              style === 'chibi' && !dragging && 'animate-pet-float',
               isJelly && 'animate-pet-jelly'
             )}
             style={{ width: size, height: size }}
           >
             {renderAvatar()}
-            {/* 脚底随动立体微阴影 */}
+            {/* 脚底随动立体微阴影（被拎起拖拽时微缩变淡，悬空感拉满） */}
             <div
               className={cn(
-                'absolute -bottom-1 h-1.5 rounded-full bg-teal-950/20 blur-[1px] transition-all',
-                !dragging && 'animate-pet-shadow'
+                'absolute -bottom-1 h-1.5 rounded-full bg-teal-950/20 blur-[1px] transition-all duration-150',
+                !dragging && (style === 'chibi' ? 'animate-pet-shadow' : 'opacity-70 scale-100'),
+                dragging && 'opacity-20 scale-70 -translate-y-1'
               )}
               style={{ width: Math.max(16, size * 0.45) }}
             />

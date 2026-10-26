@@ -45,7 +45,7 @@ export default defineConfig({
             options: {
               cacheName: 'miku-wallpaper-cache-v1',
               expiration: {
-                maxEntries: 100,
+                maxEntries: 200,
                 maxAgeSeconds: 365 * 24 * 60 * 60,
               },
               cacheableResponse: {
