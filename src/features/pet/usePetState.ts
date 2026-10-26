@@ -60,7 +60,7 @@ export function usePetState() {
   });
 
   const [pose, setPose] = useState<PetPose>('leek');
-  const [shimejiAction, setShimejiAction] = useState<ShimejiAction>('idle_sit');
+  const [shimejiAction, setShimejiAction] = useState<ShimejiAction>('idle');
   const [bubbleText, setBubbleText] = useState<string | null>(null);
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [isJelly, setIsJelly] = useState(false);
@@ -130,12 +130,12 @@ export function usePetState() {
     if (jellyTimerRef.current) clearTimeout(jellyTimerRef.current);
     jellyTimerRef.current = setTimeout(() => setIsJelly(false), 600);
 
-    // 触发动态小人欢呼比耶动效
+    // 触发动态小人欢呼比耶跳跃动效
     setShimejiAction('cheer');
     if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
     actionTimerRef.current = setTimeout(() => {
-      setShimejiAction('idle_sit');
-    }, 900);
+      setShimejiAction('idle');
+    }, 840);
 
     // 随机获取台词与动作
     const quote = getRandomPokeQuote(bubbleText ?? undefined);
@@ -153,38 +153,52 @@ export function usePetState() {
     setShimejiAction('land');
     if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
     actionTimerRef.current = setTimeout(() => {
-      setShimejiAction('idle_sit');
-    }, 420);
+      setShimejiAction('idle');
+    }, 280);
   }, []);
 
   const handleActionComplete = useCallback(() => {
     setShimejiAction((prev) => {
       if (prev === 'land' || prev === 'cheer') {
-        return 'idle_sit';
+        return 'idle';
       }
       return prev;
     });
   }, []);
 
-  // 待机自动随机动画分支（每隔 18~28 秒随机甩葱舞或打瞌睡）
+  // 待机自动随机动画分支（每隔 8~16 秒随机变换小动作，像天选姬一样活泼灵动）
   useEffect(() => {
     if (minimized || !petEnabled || petStyle !== 'animated') return;
 
     const scheduleNextIdle = () => {
-      const delay = Math.random() * 10000 + 18000;
+      const delay = Math.random() * 8000 + 8000;
       return setTimeout(() => {
         setShimejiAction((curr) => {
-          if (curr === 'idle_sit') {
+          if (curr === 'idle') {
             const hour = new Date().getHours();
-            const candidate: ShimejiAction =
-              (hour >= 23 || hour < 6) && Math.random() < 0.6
-                ? 'sleep'
-                : 'leek_spin';
+            const rand = Math.random();
+            let candidate: ShimejiAction = 'sit';
+            let duration = 4800;
 
-            const duration = candidate === 'sleep' ? 5000 : 3200;
+            if (hour >= 23 || hour < 6) {
+              candidate = rand < 0.7 ? 'sleep' : 'sit';
+              duration = 5500;
+            } else {
+              if (rand < 0.4) {
+                candidate = 'sit'; // 乖巧坐下向主人挥手
+                duration = 4800;
+              } else if (rand < 0.75) {
+                candidate = 'walk'; // 快乐漫步踏步
+                duration = 3800;
+              } else {
+                candidate = 'cheer'; // 突发开心比耶跳跃
+                duration = 840;
+              }
+            }
+
             if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
             actionTimerRef.current = setTimeout(() => {
-              setShimejiAction('idle_sit');
+              setShimejiAction('idle');
             }, duration);
 
             return candidate;
@@ -217,6 +231,10 @@ export function usePetState() {
 
   const updatePosition = useCallback((pos: PetPosition | null) => {
     setPosition(pos);
+  }, []);
+
+  const persistPosition = useCallback((pos: PetPosition | null) => {
+    setPosition(pos);
     try {
       if (pos) {
         localStorage.setItem(STORAGE_KEY_POS, JSON.stringify(pos));
@@ -229,8 +247,8 @@ export function usePetState() {
   }, []);
 
   const resetPosition = useCallback(() => {
-    updatePosition(null);
-  }, [updatePosition]);
+    persistPosition(null);
+  }, [persistPosition]);
 
   return {
     isMiku,
@@ -249,6 +267,7 @@ export function usePetState() {
     hideBubble,
     toggleMinimized,
     updatePosition,
+    persistPosition,
     resetPosition,
     startDragAction,
     endDragAction,

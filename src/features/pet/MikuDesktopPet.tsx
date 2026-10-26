@@ -30,6 +30,7 @@ export function MikuDesktopPet() {
     hideBubble,
     toggleMinimized,
     updatePosition,
+    persistPosition,
     resetPosition,
     startDragAction,
     endDragAction,
@@ -109,7 +110,7 @@ export function MikuDesktopPet() {
       /* ignore */
     }
 
-    // 若未发生明显移动，判定为点击戳一戳；若移动则执行落地动作
+    // 若未发生明显移动，判定为点击戳一戳；若移动则执行落地动作并保存位置
     if (!moved) {
       if (minimized) {
         toggleMinimized();
@@ -117,6 +118,11 @@ export function MikuDesktopPet() {
         poke();
       }
     } else {
+      const el = containerRef.current;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        persistPosition({ x: rect.left, y: rect.top });
+      }
       endDragAction();
     }
   };
@@ -135,7 +141,7 @@ export function MikuDesktopPet() {
 
     const avatarProps = {
       size: size,
-      className: 'transition-transform duration-200 select-none pointer-events-none drop-shadow-md',
+      className: 'transition-transform duration-200 select-none pointer-events-none drop-shadow-xs',
     };
     switch (pose) {
       case 'sprint':
@@ -165,13 +171,14 @@ export function MikuDesktopPet() {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      style={
-        isCustomPos
+      style={{
+        WebkitTapHighlightColor: 'transparent',
+        ...(isCustomPos
           ? { left: `${currentLeft}px`, top: `${currentTop}px`, right: 'auto', bottom: 'auto' }
-          : undefined
-      }
+          : {}),
+      }}
       className={cn(
-        'fixed z-45 touch-none select-none transition-opacity duration-300',
+        'fixed z-45 touch-none select-none transition-opacity duration-300 outline-none border-none bg-transparent',
         !isCustomPos && 'left-3 bottom-[72px] md:left-5 md:bottom-6',
         isReviewPage ? 'opacity-85 hover:opacity-100' : 'opacity-100',
         dragging && 'cursor-grabbing scale-105 opacity-90'
@@ -248,17 +255,17 @@ export function MikuDesktopPet() {
           {/* 初音立绘/动态小人本体与动效 */}
           <div
             className={cn(
-              'relative flex flex-col items-center justify-center transition-transform duration-200',
+              'relative flex flex-col items-center justify-center transition-transform duration-200 outline-none border-none bg-transparent',
               style === 'chibi' && !dragging && 'animate-pet-float',
               isJelly && 'animate-pet-jelly'
             )}
             style={{ width: size, height: size }}
           >
             {renderAvatar()}
-            {/* 脚底随动立体微阴影（被拎起拖拽时微缩变淡，悬空感拉满） */}
+            {/* 脚底随动立体微阴影（仅微弱地面柔和阴影，无任何矩形线框） */}
             <div
               className={cn(
-                'absolute -bottom-1 h-1.5 rounded-full bg-teal-950/20 blur-[1px] transition-all duration-150',
+                'absolute -bottom-1 h-1.5 rounded-full bg-teal-950/20 blur-[1px] transition-all duration-150 pointer-events-none',
                 !dragging && (style === 'chibi' ? 'animate-pet-shadow' : 'opacity-70 scale-100'),
                 dragging && 'opacity-20 scale-70 -translate-y-1'
               )}

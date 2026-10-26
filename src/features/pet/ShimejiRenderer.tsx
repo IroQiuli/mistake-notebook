@@ -37,7 +37,7 @@ export function ShimejiRenderer({
   className,
   onActionComplete,
 }: ShimejiRendererProps) {
-  const clip = SHIMEJI_CLIPS[action] || SHIMEJI_CLIPS.idle_sit;
+  const clip = SHIMEJI_CLIPS[action] || SHIMEJI_CLIPS.idle;
   const [frameIndex, setFrameIndex] = useState(0);
   const actionRef = useRef(action);
   const onCompleteRef = useRef(onActionComplete);
@@ -67,7 +67,7 @@ export function ShimejiRenderer({
           if (!clip.loop) {
             clearInterval(interval);
             onCompleteRef.current?.();
-            return prev; // 停在最后一帧
+            return prev;
           }
           return 0; // 循环播放
         }
@@ -89,7 +89,7 @@ export function ShimejiRenderer({
       height={size}
       draggable={false}
       className={cn(
-        'select-none pointer-events-none object-contain drop-shadow-md',
+        'select-none pointer-events-none object-contain',
         className
       )}
       style={{
