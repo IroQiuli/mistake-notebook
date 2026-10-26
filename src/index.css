@@ -119,3 +119,57 @@ body {
 .no-scrollbar {
   scrollbar-width: none;
 }
+
+/* =========================================================
+   初音未来桌宠微动效 (Miku Desktop Pet Animations)
+   ========================================================= */
+@keyframes miku-pet-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes miku-pet-shadow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.22;
+  }
+  50% {
+    transform: scale(0.82);
+    opacity: 0.12;
+  }
+}
+
+@keyframes miku-pet-jelly {
+  0% {
+    transform: scale(1, 1);
+  }
+  25% {
+    transform: scale(1.18, 0.82);
+  }
+  50% {
+    transform: scale(0.88, 1.15);
+  }
+  75% {
+    transform: scale(1.06, 0.94);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+
+.animate-pet-float {
+  animation: miku-pet-float 2.8s ease-in-out infinite;
+}
+
+.animate-pet-shadow {
+  animation: miku-pet-shadow 2.8s ease-in-out infinite;
+}
+
+.animate-pet-jelly {
+  animation: miku-pet-jelly 0.55s cubic-bezier(0.25, 1, 0.5, 1);
+}
+

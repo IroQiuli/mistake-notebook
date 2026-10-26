@@ -10,6 +10,7 @@ import {
   Palette,
   Plus,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
   Sliders,
   Sparkles,
@@ -17,6 +18,7 @@ import {
   Zap,
   Share2,
 } from 'lucide-react';
+import { MikuChibiLeek } from '../../ui/MikuChibi';
 import { db, getSetting, getSettingSync, setSetting } from '../../storage/db';
 import { backupFilename, exportBackup, importBackup, saveOrShareBackup } from '../../storage/backup';
 import {
@@ -87,6 +89,8 @@ export default function SettingsPage() {
   const wallpaper = useLiveQuery(() => getSetting<string>('wallpaper', ''), [], getSettingSync('wallpaper', ''));
   const wallpaperBlur = useLiveQuery(() => getSetting<number>('wallpaperBlur', 0), [], getSettingSync('wallpaperBlur', 0));
   const wallpaperMask = useLiveQuery(() => getSetting<number>('wallpaperMask', 0.08), [], getSettingSync('wallpaperMask', 0.08));
+  const petEnabled = useLiveQuery(() => getSetting<boolean>('petEnabled', true), [], getSettingSync('petEnabled', true));
+  const petSize = useLiveQuery(() => getSetting<number>('petSize', 64), [], getSettingSync('petSize', 64));
   const [onlineUrl, setOnlineUrl] = useState('');
   const wallRef = useRef<HTMLInputElement>(null);
 
@@ -669,6 +673,88 @@ export default function SettingsPage() {
             }
           }}
         />
+
+        {/* 初音伴学桌宠设置 */}
+        <div className="mt-4 pt-3 border-t border-zinc-100 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MikuChibiLeek size={24} className="shrink-0" />
+              <div>
+                <span className="text-xs font-semibold text-zinc-800">
+                  初音未来 · 伴学桌宠
+                </span>
+                <p className="text-[10px] text-zinc-400">
+                  电脑与平板左下角常驻伴学，支持自由拖拽与戳一戳互动
+                </p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={petEnabled}
+                onChange={async (e) => {
+                  await setSetting('petEnabled', e.target.checked);
+                  toast.show(e.target.checked ? '已开启初音伴学桌宠' : '已关闭初音伴学桌宠', 'info');
+                }}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal-500"></div>
+            </label>
+          </div>
+
+          {petEnabled && (
+            <div className="rounded-xl bg-zinc-50 p-2.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-600">桌宠显示大小</span>
+                <div className="flex gap-1.5">
+                  {[
+                    { label: '精巧 (48px)', val: 48 },
+                    { label: '标准 (64px)', val: 64 },
+                    { label: '醒目 (80px)', val: 80 },
+                  ].map((opt) => (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={async () => {
+                        await setSetting('petSize', opt.val);
+                      }}
+                      className={cn(
+                        'rounded-lg px-2.5 py-1 text-xs font-medium transition-all',
+                        petSize === opt.val
+                          ? 'bg-teal-600 text-white shadow-xs'
+                          : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-100'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-zinc-200/50">
+                <span className="text-[11px] text-zinc-400">
+                  若曾拖动位置，可随时一键贴边复位
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      localStorage.removeItem('miku_pet_pos');
+                      window.dispatchEvent(new Event('storage'));
+                    } catch {
+                      /* ignore */
+                    }
+                    toast.show('已重置桌宠至默认左下角', 'success');
+                  }}
+                  className="flex items-center gap-1 text-xs text-teal-600 hover:underline"
+                >
+                  <RotateCcw size={12} />
+                  复位到左下角
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </Section>
 
       <Section title="学习目标">

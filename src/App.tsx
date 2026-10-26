@@ -35,6 +35,7 @@ import {
   MikuStatsIcon,
 } from './ui/MikuIcons';
 import { MikuChibiLeek } from './ui/MikuChibi';
+import { MikuDesktopPet } from './features/pet/MikuDesktopPet';
 import { resolveThemeUrl } from './lib/themeUrl';
 
 const NAV = [
@@ -338,6 +339,9 @@ function Shell() {
           </div>
         </nav>
       )}
+
+      {/* 初音未来常驻伴学桌宠 */}
+      <MikuDesktopPet />
     </div>
   );
 }
