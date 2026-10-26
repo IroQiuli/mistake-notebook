@@ -37,6 +37,7 @@ import {
 import { MikuChibiLeek } from './ui/MikuChibi';
 import { MikuDesktopPet } from './features/pet/MikuDesktopPet';
 import { resolveThemeUrl } from './lib/themeUrl';
+import { PERMANENT_MEDIA_CACHE } from './lib/version';
 
 const NAV = [
   { to: '/', label: '首页', defaultIcon: CalendarDays, mikuIcon: MikuHomeIcon },
@@ -189,7 +190,26 @@ function Shell() {
     } else {
       document.documentElement.classList.remove('has-wallpaper');
     }
-  }, [isMiku, activeWallpaper]);
+
+    // 自动预热持久缓存当前壁纸，保证断网或代码更新后依然 0 延时秒开
+    if (
+      resolvedWallpaper &&
+      typeof window !== 'undefined' &&
+      'caches' in window &&
+      !resolvedWallpaper.startsWith('data:')
+    ) {
+      caches.open(PERMANENT_MEDIA_CACHE).then(async (cache) => {
+        const match = await cache.match(resolvedWallpaper);
+        if (!match) {
+          fetch(resolvedWallpaper)
+            .then((res) => {
+              if (res.ok) cache.put(resolvedWallpaper, res);
+            })
+            .catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  }, [isMiku, activeWallpaper, resolvedWallpaper]);
 
   return (
     <div className={cn('min-h-full md:flex relative transition-colors', activeWallpaper ? 'bg-transparent' : 'bg-zinc-50')}>

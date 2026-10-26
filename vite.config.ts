@@ -33,8 +33,27 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        globPatterns: ['**/*.{js,css,html,png,svg,woff2,jpg,jpeg,webp}'],
+        globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            urlPattern: ({ request, url }) =>
+              request.destination === 'image' ||
+              url.pathname.includes('/themes/') ||
+              /\.(?:jpg|jpeg|png|webp|svg|ico)$/i.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'miku-wallpaper-cache-v1',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 365 * 24 * 60 * 60,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
       },
     }),
   ],
