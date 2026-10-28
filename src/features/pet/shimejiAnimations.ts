@@ -4,7 +4,10 @@ export type ShimejiAction =
   | 'idle'         // 活泼常态待机：轻快踏步、双马尾左右摇摆律动、眨眼 (全动态、纯净无框)
   | 'sit'          // 萌坐待机：乖巧坐下、摇晃小手望向主人 (纯净无纸箱)
   | 'walk'         // 漫步小跑
-  | 'drag_dangle'  // 提在半空中扑腾蹬腿挣扎 (招牌动作)
+  | 'drag_hang'    // 抓取并在空中静止不动时：自然垂直悬挂
+  | 'drag_left'    // 抓取并向左拖拽移动：受惯性往右侧甩起摇摆
+  | 'drag_right'   // 抓取并向右拖拽移动：受惯性往左侧甩起摇摆
+  | 'drag_dangle'  // 兼容悬挂别名
   | 'land'         // 落地回弹冲击缓冲
   | 'cheer'        // 欢呼跳跃比耶
   | 'sleep'        // 趴着小憩揉眼
@@ -56,15 +59,31 @@ export const SHIMEJI_CLIPS: Record<ShimejiAction, AnimationClip> = {
     loop: true,
   },
 
-  // 鼠标/手指抓起提在半空中蹬腿挣扎扑腾（天选姬灵魂招牌动作，高频交互）
+  // 鼠标/手指抓起并静止不动：静止自然垂直悬挂（不再机械左右无序摇摆）
+  drag_hang: {
+    frames: ['themes/miku/shimeji/shime6.png'],
+    intervalMs: 1000,
+    loop: true,
+  },
+
+  // 抓起向左拖拽移动：身体受惯性往右后方甩起摆动
+  drag_left: {
+    frames: ['themes/miku/shimeji/shime8.png'],
+    intervalMs: 1000,
+    loop: true,
+  },
+
+  // 抓起向右拖拽移动：身体受惯性往左后方甩起摆动
+  drag_right: {
+    frames: ['themes/miku/shimeji/shime7.png'],
+    intervalMs: 1000,
+    loop: true,
+  },
+
+  // 兼容别名
   drag_dangle: {
-    frames: [
-      'themes/miku/shimeji/shime5.png',
-      'themes/miku/shimeji/shime6.png',
-      'themes/miku/shimeji/shime7.png',
-      'themes/miku/shimeji/shime6.png',
-    ],
-    intervalMs: 90,
+    frames: ['themes/miku/shimeji/shime6.png'],
+    intervalMs: 1000,
     loop: true,
   },
 

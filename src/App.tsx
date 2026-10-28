@@ -237,7 +237,7 @@ function Shell() {
         </div>
       )}
 
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-zinc-200 bg-white px-3 py-5 md:flex relative z-10 transition-colors">
+      <aside className="desktop-sidebar sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-zinc-200 bg-white px-3 py-5 md:flex relative z-10 transition-colors">
         <div className="mb-6 flex items-center gap-2.5 px-2">
           {isMiku ? (
             <div className="flex h-9 w-9 items-center justify-center rounded-xl miku-neon-badge text-xs font-black text-white tracking-tight shadow-sm shrink-0">

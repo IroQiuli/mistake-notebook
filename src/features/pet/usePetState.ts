@@ -144,9 +144,18 @@ export function usePetState() {
   }, [bubbleText, showBubble]);
 
   // 抓起与拖拽交互状态转换
-  const startDragAction = useCallback(() => {
+  const startDragAction = useCallback((direction: 'left' | 'right' | 'hang' = 'hang') => {
     if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
-    setShimejiAction('drag_dangle');
+    if (direction === 'left') setShimejiAction('drag_left');
+    else if (direction === 'right') setShimejiAction('drag_right');
+    else setShimejiAction('drag_hang');
+  }, []);
+
+  const updateDragDirection = useCallback((direction: 'left' | 'right' | 'hang') => {
+    if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+    if (direction === 'left') setShimejiAction('drag_left');
+    else if (direction === 'right') setShimejiAction('drag_right');
+    else setShimejiAction('drag_hang');
   }, []);
 
   const endDragAction = useCallback(() => {
@@ -270,6 +279,7 @@ export function usePetState() {
     persistPosition,
     resetPosition,
     startDragAction,
+    updateDragDirection,
     endDragAction,
     handleActionComplete,
     setPetEnabled: (val: boolean) => setSetting('petEnabled', val),

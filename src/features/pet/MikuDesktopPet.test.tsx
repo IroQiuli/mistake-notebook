@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MikuDesktopPet } from './MikuDesktopPet';
 import { db, setSetting } from '../../storage/db';
@@ -90,6 +90,40 @@ describe('MikuDesktopPet 组件测试', () => {
     const img = screen.getByAltText('初音未来动态桌宠');
     expect(img).toBeInTheDocument();
     // 拖拽悬空扑腾帧
-    expect(img.getAttribute('src')).toMatch(/shime5|shime6|shime7/);
+    expect(img.getAttribute('src')).toMatch(/shime5|shime6|shime7|shime8/);
+  });
+
+  it('拖拽向左或向右移动时随动摇摆，静止时垂立悬挂', () => {
+    vi.useFakeTimers();
+    render(
+      <MemoryRouter>
+        <MikuDesktopPet />
+      </MemoryRouter>
+    );
+
+    const pet = screen.getByLabelText('初音未来伴学桌宠');
+    act(() => {
+      fireEvent.pointerDown(pet, { clientX: 100, clientY: 100, pointerId: 1 });
+      // 向右拖拽：向右移动，身体向左后甩起 (shime7)
+      fireEvent.pointerMove(pet, { clientX: 160, clientY: 100, pointerId: 1 });
+    });
+    let img = screen.getByAltText('初音未来动态桌宠');
+    expect(img.getAttribute('src')).toContain('shime7.png');
+
+    act(() => {
+      // 向左拖拽：向左移动，身体向右后甩起 (shime8)
+      fireEvent.pointerMove(pet, { clientX: 90, clientY: 100, pointerId: 1 });
+    });
+    img = screen.getByAltText('初音未来动态桌宠');
+    expect(img.getAttribute('src')).toContain('shime8.png');
+
+    // 静止不动 120ms 后：判定为在空中静止悬挂 (shime6)
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    img = screen.getByAltText('初音未来动态桌宠');
+    expect(img.getAttribute('src')).toContain('shime6.png');
+
+    vi.useRealTimers();
   });
 });

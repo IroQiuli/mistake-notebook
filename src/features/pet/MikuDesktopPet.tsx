@@ -33,6 +33,7 @@ export function MikuDesktopPet() {
     persistPosition,
     resetPosition,
     startDragAction,
+    updateDragDirection,
     endDragAction,
     handleActionComplete,
   } = usePetState();
@@ -42,7 +43,11 @@ export function MikuDesktopPet() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ startX: number; startY: number; initX: number; initY: number; moved: boolean } | null>(null);
+  const lastPointerRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const dragVelocityRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 });
+  const idleHangTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [dragTilt, setDragTilt] = useState(0);
 
   // 若非 Miku 主题或用户在设置中关闭了桌宠，则不渲染
   if (!isMiku || !enabled) {
@@ -70,6 +75,14 @@ export function MikuDesktopPet() {
       initY: rect.top,
       moved: false,
     };
+    lastPointerRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      time: performance.now(),
+    };
+    dragVelocityRef.current = { vx: 0, vy: 0 };
+    setDragTilt(0);
+    if (idleHangTimerRef.current) clearTimeout(idleHangTimerRef.current);
 
     if (typeof (e.target as any)?.setPointerCapture === 'function') {
       (e.target as any).setPointerCapture(e.pointerId);
@@ -86,7 +99,7 @@ export function MikuDesktopPet() {
       dragStartRef.current.moved = true;
       setDragging(true);
       hideBubble();
-      startDragAction();
+      startDragAction('hang');
     }
 
     if (dragStartRef.current.moved) {
@@ -95,13 +108,54 @@ export function MikuDesktopPet() {
       const nextX = Math.min(maxX, Math.max(10, initX + dx));
       const nextY = Math.min(maxY, Math.max(10, initY + dy));
       updatePosition({ x: nextX, y: nextY });
+
+      // 计算指针移动速度与方向（驱动随速摆动与静止垂直悬挂）
+      const now = performance.now();
+      const last = lastPointerRef.current ?? { x: e.clientX, y: e.clientY, time: now - 16 };
+      const dt = Math.max(16, now - last.time);
+      const instantVx = (e.clientX - last.x) / (dt / 16.67);
+      const instantVy = (e.clientY - last.y) / (dt / 16.67);
+
+      dragVelocityRef.current.vx = dragVelocityRef.current.vx * 0.3 + instantVx * 0.7;
+      dragVelocityRef.current.vy = dragVelocityRef.current.vy * 0.3 + instantVy * 0.7;
+      lastPointerRef.current = { x: e.clientX, y: e.clientY, time: now };
+
+      const vx = dragVelocityRef.current.vx;
+      if (idleHangTimerRef.current) clearTimeout(idleHangTimerRef.current);
+
+      if (vx > 1.2) {
+        // 向右移动：身体受惯性往左后方甩起摆动
+        updateDragDirection('right');
+        const targetTilt = -Math.min(22, Math.max(6, Math.abs(vx) * 2.5));
+        setDragTilt(targetTilt);
+      } else if (vx < -1.2) {
+        // 向左移动：身体受惯性往右后方甩起摆动
+        updateDragDirection('left');
+        const targetTilt = Math.min(22, Math.max(6, Math.abs(vx) * 2.5));
+        setDragTilt(targetTilt);
+      } else {
+        // 缓慢或垂直移动：悬挂
+        updateDragDirection('hang');
+        setDragTilt(0);
+      }
+
+      // 静止不动检测：若 100ms 内没有新的位移，判定为在空中静止悬挂
+      idleHangTimerRef.current = setTimeout(() => {
+        dragVelocityRef.current = { vx: 0, vy: 0 };
+        updateDragDirection('hang');
+        setDragTilt(0);
+      }, 100);
     }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!dragStartRef.current) return;
+    if (idleHangTimerRef.current) clearTimeout(idleHangTimerRef.current);
     const moved = dragStartRef.current.moved;
     dragStartRef.current = null;
+    lastPointerRef.current = null;
+    dragVelocityRef.current = { vx: 0, vy: 0 };
+    setDragTilt(0);
     setDragging(false);
 
     try {
@@ -164,8 +218,9 @@ export function MikuDesktopPet() {
   const isRightSide = position ? position.x > window.innerWidth / 2 : false;
 
   return (
-    <aside
+    <div
       ref={containerRef}
+      role="complementary"
       aria-label="初音未来伴学桌宠"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -178,10 +233,10 @@ export function MikuDesktopPet() {
           : {}),
       }}
       className={cn(
-        'fixed z-45 touch-none select-none transition-opacity duration-300 outline-none border-none bg-transparent',
+        'miku-pet-container fixed z-45 touch-none select-none transition-opacity duration-300 outline-none border-none bg-transparent',
         !isCustomPos && 'left-3 bottom-[72px] md:left-5 md:bottom-6',
         isReviewPage ? 'opacity-85 hover:opacity-100' : 'opacity-100',
-        dragging && 'cursor-grabbing scale-105 opacity-90'
+        dragging && 'cursor-grabbing scale-105 opacity-95'
       )}
     >
       {/* 最小化形态：精致小葱/音符呼吸徽章 */}
@@ -255,11 +310,17 @@ export function MikuDesktopPet() {
           {/* 初音立绘/动态小人本体与动效 */}
           <div
             className={cn(
-              'relative flex flex-col items-center justify-center transition-transform duration-200 outline-none border-none bg-transparent',
+              'relative flex flex-col items-center justify-center outline-none border-none bg-transparent',
+              dragging ? 'transition-transform duration-100 ease-out' : 'transition-transform duration-200',
               style === 'chibi' && !dragging && 'animate-pet-float',
               isJelly && 'animate-pet-jelly'
             )}
-            style={{ width: size, height: size }}
+            style={{
+              width: size,
+              height: size,
+              transformOrigin: '50% 12%',
+              transform: dragging && dragTilt !== 0 ? `rotate(${dragTilt}deg)` : undefined,
+            }}
           >
             {renderAvatar()}
             {/* 脚底随动立体微阴影（仅微弱地面柔和阴影，无任何矩形线框） */}
@@ -289,6 +350,6 @@ export function MikuDesktopPet() {
           )}
         </div>
       )}
-    </aside>
+    </div>
   );
 }
