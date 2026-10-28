@@ -95,7 +95,7 @@ export function buildQueue(problems: Problem[], cards: Card[], opts: QueueOption
   const duePool = [...due, ...limitedFresh];
 
   const hasQuotas = quotas && Object.keys(quotas).length > 0;
-  let all = hasQuotas ? applyQuotas(duePool, later, quotas, reviewedCounts) : duePool;
+  let all = hasQuotas ? applyQuotas(duePool, later, quotas, reviewedCounts, now) : duePool;
 
   if (limit && limit > 0) {
     const todayDone = reviewedTodayIds ? reviewedTodayIds.size : 0;
@@ -120,16 +120,19 @@ function sortDue(items: QueueItem[]): void {
 }
 
 /**
- * 按每科题量裁剪队列；不足的科目从「还没到期」的题里按到期时间从近到远补齐。
- * 补齐只是提前复习，不会改动排期本身。
+ * 按每科题量裁剪队列；不足的科目从「还没到期」的题里按未来排期从近到远（due 升序）补齐。
+ * 补齐是提前把未来几天的题拿来做，不会打乱原有排期。
+ * 严禁拉取昨天或今天刚做过的题（必须尊重其间隔），严禁拉取从未学过的新题。
  * 若提供了 reviewedCounts，则按 (quota - done) 扣减剩余待写题量，做满后不再拉题。
  */
 function applyQuotas(
   duePool: QueueItem[],
   later: QueueItem[],
   quotas: Record<string, number>,
-  reviewedCounts?: Record<string, number>
+  reviewedCounts?: Record<string, number>,
+  now?: number
 ): QueueItem[] {
+  const yesterdayStart = now ? learningDayStart(now - 24 * 3600 * 1000) : 0;
   const bySubjectDue = new Map<string, QueueItem[]>();
   for (const it of duePool) {
     const arr = bySubjectDue.get(it.problem.subjectId) ?? [];
@@ -172,10 +175,16 @@ function applyQuotas(
     out.push(...taken);
 
     if (taken.length < remainingQuota) {
-      // 严禁将尚未经过初次复习的新题（state === 0）当做 filler 提前复习拉入今日清单
-      const eligibleLater = (bySubjectLater.get(sid) ?? []).filter(
-        (it) => it.card.state !== 0
-      );
+      // 严禁将以下卡片作为配额补齐（filler）拉入今日清单：
+      // 1. 尚未经过初次复习的新题（state === 0）
+      // 2. 昨天或今天刚做过的题（lastReview >= yesterdayStart）——必须尊重其排期间隔，严禁打乱排期乱塞到今天做！
+      const eligibleLater = (bySubjectLater.get(sid) ?? []).filter((it) => {
+        if (it.card.state !== undefined && it.card.state === 0) return false;
+        if (yesterdayStart > 0 && it.card.lastReview && it.card.lastReview >= yesterdayStart) {
+          return false;
+        }
+        return true;
+      });
       const fillers = eligibleLater
         .slice(0, remainingQuota - taken.length)
         .map((it) => ({ ...it, auto: true }));
@@ -183,17 +192,34 @@ function applyQuotas(
     }
   }
 
-  // 到期的整体排在「补齐的」前面
-  out.sort((a, b) => Number(!!a.auto) - Number(!!b.auto));
+  // 到期的整体排在「补齐的」前面；补齐题按未来排期 due 升序排列
+  out.sort((a, b) => {
+    if (Boolean(a.auto) !== Boolean(b.auto)) {
+      return Number(Boolean(a.auto)) - Number(Boolean(b.auto));
+    }
+    if (a.auto && b.auto) {
+      return a.card.due - b.card.due;
+    }
+    return 0;
+  });
   return out;
 }
 
 function interleaveBySubject(items: QueueItem[]): QueueItem[] {
-  // 逾期错题（昨天及更早顺延下来的）集中排在最前列优先处理
+  // 分为三层：
+  // 第 1 层：逾期错题（昨天及更早顺延下来的）最紧急，集中排在最前列优先处理
   const overdueItems = items.filter((it) => it.overdueDays > 0);
-  const normalItems = items.filter((it) => it.overdueDays === 0);
+  // 第 2 层：今日正常到期错题，按科目轮转打散平摊认知精力
+  const dueTodayItems = items.filter((it) => it.overdueDays === 0 && !it.auto);
+  // 第 3 层：配额补齐错题（提前做未来几天的题），严禁打散插入今日到期题之前，严格按未来到期日升序排期依次完成
+  const fillerItems = items.filter((it) => Boolean(it.auto));
+  fillerItems.sort((a, b) => a.card.due - b.card.due || a.problem.createdAt - b.problem.createdAt);
 
-  return [...roundRobinBySubject(overdueItems), ...roundRobinBySubject(normalItems)];
+  return [
+    ...roundRobinBySubject(overdueItems),
+    ...roundRobinBySubject(dueTodayItems),
+    ...fillerItems,
+  ];
 }
 
 function roundRobinBySubject(items: QueueItem[]): QueueItem[] {

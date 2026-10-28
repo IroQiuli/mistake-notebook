@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { newId } from '../../lib/id';
 import { db, getSetting } from '../../storage/db';
 import {
@@ -112,51 +112,57 @@ export function useSession(subjectId?: string, paperIds?: string[] | null) {
     [queue]
   );
 
+  const ratingLockRef = useRef(false);
+
   const rate = useCallback(
     async (rating: Rating) => {
-      if (!current) return;
-      const now = Date.now();
-      const weight = weightOf(current.problem);
-      const result = applyRating(current.card, rating, now, weight);
-      const nextWeight = adjustWeight(weight, rating);
-      const durationMs = Math.max(1000, now - shownAt);
+      if (!current || ratingLockRef.current) return;
+      ratingLockRef.current = true;
+      try {
+        const targetId = current.problem.id;
+        const now = Date.now();
+        const weight = weightOf(current.problem);
+        const result = applyRating(current.card, rating, now, weight);
+        const nextWeight = adjustWeight(weight, rating);
+        const durationMs = Math.max(1000, now - shownAt);
 
-      await db.transaction('rw', db.cards, db.reviewLogs, db.problems, async () => {
-        await db.cards.put(result.card);
-        await db.problems.update(current.problem.id, { weight: nextWeight });
-        await db.reviewLogs.add({
-          id: newId(),
-          problemId: current.problem.id,
-          rating,
-          reviewedAt: now,
-          durationMs,
-          prevDue: result.prevDue,
-          nextDue: result.nextDue,
-          prevState: result.prevState,
-          nextState: result.card.state,
+        await db.transaction('rw', db.cards, db.reviewLogs, db.problems, async () => {
+          await db.cards.put(result.card);
+          await db.problems.update(targetId, { weight: nextWeight });
+          await db.reviewLogs.add({
+            id: newId(),
+            problemId: targetId,
+            rating,
+            reviewedAt: now,
+            durationMs,
+            prevDue: result.prevDue,
+            nextDue: result.nextDue,
+            prevState: result.prevState,
+            nextState: result.card.state,
+          });
         });
-      });
 
-      setStats((prev) => [...prev, { rating, ms: durationMs }]);
-      setRevealed(false);
+        setStats((prev) => [...prev, { rating, ms: durationMs }]);
+        setRevealed(false);
 
-      // 本轮做题中，点击四档按钮中任意一个即在本次做题界面立即移除该题
-      setQueue((prev) => {
-        if (!prev) return null;
-        return prev.filter((_, idx) => idx !== index);
-      });
+        // 本轮做题中，点击四档按钮中任意一个即在本次做题界面立即移除该题（按 problem.id 精准剔除）
+        setQueue((prev) => {
+          if (!prev) return null;
+          const next = prev.filter((item) => item.problem.id !== targetId);
+          // 若处于队列末尾或队列长度缩水，立即在同一批次更新中修正指针
+          setIndex((i) => {
+            if (next.length === 0) return 0;
+            return Math.min(i, next.length - 1);
+          });
+          return next;
+        });
 
-      // 若处于队列末尾，自适应收缩指针
-      setIndex((i) => {
-        if (!queue) return 0;
-        const nextLen = queue.length - 1;
-        if (nextLen <= 0) return 0;
-        return Math.min(i, nextLen - 1);
-      });
-
-      setShownAt(Date.now());
+        setShownAt(Date.now());
+      } finally {
+        ratingLockRef.current = false;
+      }
     },
-    [current, shownAt, queue, index]
+    [current, shownAt]
   );
 
   /** 复习中即时修改或清空错因备注 */

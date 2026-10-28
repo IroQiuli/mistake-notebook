@@ -134,4 +134,56 @@ describe('每科每日题量', () => {
     });
     expect(q).toHaveLength(0);
   });
+
+  it('配额补齐绝不拉取昨天刚做过的题（lastReview 处于昨日学习日内），而是拉取更早复习过但未来排期最接近的题', () => {
+    const ps = [
+      problem({ id: 'due1' }),
+      problem({ id: 'yesterdayReviewed' }),
+      problem({ id: 'futureEligible' }),
+    ];
+    const cs = [
+      card('due1', T0 - DAY), // 今日到期
+      {
+        ...card('yesterdayReviewed', T0 + DAY), // 昨天刚做完推到明天
+        lastReview: T0 - DAY + 2 * 3600 * 1000,
+      },
+      {
+        ...card('futureEligible', T0 + 2 * DAY), // 以前做过的，后天到期
+        lastReview: T0 - 7 * DAY,
+      },
+    ];
+    const q = buildQueue(ps, cs, {
+      now: T0,
+      quotas: { s1: 2 },
+      interleave: false,
+    });
+    // 配额 2 道：1 道 due1 + 1 道 filler。filler 必须是 futureEligible，绝不能是 yesterdayReviewed！
+    expect(q.map((x) => x.problem.id)).toEqual(['due1', 'futureEligible']);
+    expect(q.find((x) => x.problem.id === 'yesterdayReviewed')).toBeUndefined();
+  });
+
+  it('即使开启 interleave，补齐题也严格排在所有今日到期题之后，并按未来排期 due 升序排列', () => {
+    const ps = [
+      problem({ id: 'd1', subjectId: 's1' }),
+      problem({ id: 'd2', subjectId: 's2' }),
+      problem({ id: 'later_close', subjectId: 's1' }),
+      problem({ id: 'later_far', subjectId: 's2' }),
+    ];
+    const cs = [
+      card('d1', T0 - DAY),
+      card('d2', T0 - DAY),
+      card('later_close', T0 + DAY), // 明天到期
+      card('later_far', T0 + 3 * DAY), // 3天后到期
+    ];
+    const q = buildQueue(ps, cs, {
+      now: T0,
+      quotas: { s1: 2, s2: 2 },
+      interleave: true,
+    });
+    // d1 和 d2 是今日到期题，优先轮转
+    // later_close (明天) 和 later_far (3天后) 是补齐题，排在今日到期题之后，且严格按 due 升序
+    expect(q.map((x) => x.problem.id)).toEqual(['d1', 'd2', 'later_close', 'later_far']);
+    expect(q.slice(0, 2).every((x) => !x.auto)).toBe(true);
+    expect(q.slice(2).every((x) => x.auto)).toBe(true);
+  });
 });
